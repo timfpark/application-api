@@ -20,10 +20,11 @@ spec:
               openAPIV3Schema:
                   type: object
                   properties:
-                      spec: # There is only one (required) field named "replicas" specifying how many pods are created by the Operator
+                      spec:
                           type: object
                           properties:
-                              replicas:
-                                  type: integer
-                                  format: int32
-                          required: ["replicas"]
+                              cluster:
+                                  type: string
+                              workload:
+                                  type: string
+                          required: ["cluster", "workload"]

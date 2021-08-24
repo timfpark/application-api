@@ -18,54 +18,10 @@ use std::collections::BTreeMap;
 pub async fn deploy(
     client: Client,
     name: &str,
-    replicas: i32,
     namespace: &str,
-) -> Result<Deployment, Error> {
-    let mut labels: BTreeMap<String, String> = BTreeMap::new();
-    labels.insert("app".to_owned(), name.to_owned());
-
-    // Definition of the deployment. Alternatively, a YAML representation could be used as well.
-    let deployment: Deployment = Deployment {
-        metadata: ObjectMeta {
-            name: Some(name.to_owned()),
-            namespace: Some(namespace.to_owned()),
-            labels: labels.clone(),
-            ..ObjectMeta::default()
-        },
-        spec: Some(DeploymentSpec {
-            replicas: Some(replicas),
-            selector: LabelSelector {
-                match_expressions: vec![],
-                match_labels: labels.clone(),
-            },
-            template: PodTemplateSpec {
-                spec: Some(PodSpec {
-                    containers: vec![Container {
-                        name: name.to_owned(),
-                        image: Some("inanimate/echo-server:latest".to_owned()),
-                        ports: vec![ContainerPort {
-                            container_port: 8080,
-                            ..ContainerPort::default()
-                        }],
-                        ..Container::default()
-                    }],
-                    ..PodSpec::default()
-                }),
-                metadata: Some(ObjectMeta {
-                    labels,
-                    ..ObjectMeta::default()
-                }),
-            },
-            ..DeploymentSpec::default()
-        }),
-        ..Deployment::default()
-    };
-
-    // Create the deployment defined above
-    let deployment_api: Api<Deployment> = Api::namespaced(client, namespace);
-    deployment_api
-        .create(&PostParams::default(), &deployment)
-        .await
+) -> Result<(), Error> {
+    println!("Workload assignment deploy");
+    Ok(())
 }
 
 /// Deletes an existing deployment.
@@ -77,7 +33,9 @@ pub async fn deploy(
 ///
 /// Note: It is assumed the deployment exists for simplicity. Otherwise returns an Error.
 pub async fn delete(client: Client, name: &str, namespace: &str) -> Result<(), Error> {
-    let api: Api<Deployment> = Api::namespaced(client, namespace);
-    api.delete(name, &DeleteParams::default()).await?;
+    println!("Workload assignment delete");
+
+    // let api: Api<Deployment> = Api::namespaced(client, namespace);
+    // api.delete(name, &DeleteParams::default()).await?;
     Ok(())
 }

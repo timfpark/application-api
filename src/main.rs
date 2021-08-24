@@ -6,11 +6,11 @@ use kube_runtime::controller::{Context, ReconcilerAction};
 use kube_runtime::Controller;
 use tokio::time::Duration;
 
-use crate::crd::WorkloadAssignment;
-
-pub mod crd;
-mod workload_assignment;
 mod finalizer;
+mod models;
+mod workload_assignment;
+
+use models::workload_assignment::WorkloadAssignment;
 
 #[tokio::main]
 async fn main() {
@@ -105,8 +105,10 @@ async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<Con
             // Apply the finalizer first. If that fails, the `?` operator invokes automatic conversion
             // of `kube::Error` to the `Error` defined in this crate.
             finalizer::add(client.clone(), &name, &namespace).await?;
+
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` WorkloadAssignment service pods.
-            workload_assignment::deploy(client, &workload_assignment.name(), workload_assignment.spec.replicas, &namespace).await?;
+            workload_assignment::deploy(client, &workload_assignment.name(), &namespace).await?;
+
             Ok(ReconcilerAction {
                 // Finalizer is added, deployment is deployed, re-check in 10 seconds.
                 requeue_after: Some(Duration::from_secs(10)),

@@ -1,0 +1,29 @@
+apiVersion: example.com/v1
+kind: Workload
+metadata:
+    name: daemon-workload
+    namespace: default
+spec:
+    #    assignment:
+    #        - id: all # match all clusters
+    #          matching:
+    #              - label: cloud
+    #                value: azure
+    templates:
+        deployment: # this template will be deployed per workload cluster assigned.
+            source: git
+            location: "https://github.com/timfpark/test-workload/deployment"
+#        global: # this template will be deployed once for the whole workload on control plane
+#            source: git
+#            location: "https://github.com/timfpark/test-workload/global"
+#    overrides:
+#        azure: # name of override
+#            matching:
+#                - label: cloud
+#                  value: azure
+#            overrides:
+#                - key: endpoint
+#                  value: db.azure.com
+#        eastus:
+#            label: region
+#            matching: eastus

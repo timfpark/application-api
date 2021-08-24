@@ -1,0 +1,8 @@
+apiVersion: example.com/v1
+kind: WorkloadAssignment
+metadata:
+    name: daemon-workload-azure-eastus2-1-assignment
+    namespace: default
+spec:
+    cluster: "azure-eastus2-1"
+    workload: "daemon-workload"

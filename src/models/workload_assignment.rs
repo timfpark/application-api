@@ -15,5 +15,6 @@ use serde::{Deserialize, Serialize};
     namespaced
 )]
 pub struct WorkloadAssignmentSpec {
-    pub replicas: i32,
+    pub workload: String,
+    pub cluster: String
 }
