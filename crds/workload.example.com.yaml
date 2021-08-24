@@ -23,6 +23,8 @@ spec:
                       spec:
                           type: object
                           properties:
+                              reconciler:
+                                  type: string
                               templates: # templates define the resources that are deployed
                                   type: object
                                   properties:
@@ -31,7 +33,8 @@ spec:
                                           properties:
                                               source:
                                                   type: string
-                                              location:
+                                              path:
                                                   type: string
-                                          required: ["source", "location"]
+                                          required: ["source"]
                                   required: ["deployment"]
+                          required: ["templates"]

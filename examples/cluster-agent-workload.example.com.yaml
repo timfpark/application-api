@@ -1,7 +1,7 @@
 apiVersion: example.com/v1
 kind: Workload
 metadata:
-    name: daemon-workload
+    name: cluster-agent-workload
     namespace: default
 spec:
     #    assignment:
@@ -9,13 +9,13 @@ spec:
     #          matching:
     #              - label: cloud
     #                value: azure
+    reconciler: gitops # specifies the mechanism used to reconcile workloads (currently only gitops supported)
     templates:
         deployment: # this template will be deployed per workload cluster assigned.
-            source: git
-            location: "https://github.com/timfpark/test-workload/deployment"
+            source: "https://github.com/timfpark/cluster-agent" # reconciler specific identifier for a source
+            path: "deployment" # reconciler specific path within that source
 #        global: # this template will be deployed once for the whole workload on control plane
-#            source: git
-#            location: "https://github.com/timfpark/test-workload/global"
+#            source: "https://github.com/timfpark/test-workload/global"
 #    overrides:
 #        azure: # name of override
 #            matching:

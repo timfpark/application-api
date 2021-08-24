@@ -8,6 +8,7 @@ use tokio::time::Duration;
 
 mod models;
 mod controllers;
+mod reconcilers;
 
 use models::workload_assignment::WorkloadAssignment;
 use controllers::workload_assignment;

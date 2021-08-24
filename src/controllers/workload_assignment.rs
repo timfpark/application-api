@@ -6,6 +6,7 @@ use kube::{Api, Client, Error};
 use std::collections::BTreeMap;
 
 use crate::models::workload_assignment::WorkloadAssignment;
+use crate::reconcilers::gitops;
 
 use kube::api::{Patch, PatchParams};
 use serde_json::{json, Value};
@@ -46,7 +47,12 @@ pub async fn create_deployment(
     name: &str,
     namespace: &str,
 ) -> Result<(), Error> {
-    println!("Workload assignment deploy");
+
+    // load workload from kubernetes
+    // have reconciler load workload template
+    // have reconciler template out deployment
+    // have reconciler commit deployment
+
     Ok(())
 }
 
@@ -63,6 +69,7 @@ pub async fn delete_deployment(client: Client, name: &str, namespace: &str) -> R
 
     // let api: Api<Deployment> = Api::namespaced(client, namespace);
     // api.delete(name, &DeleteParams::default()).await?;
+
     Ok(())
 }
 
