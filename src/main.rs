@@ -6,11 +6,11 @@ use kube_runtime::controller::{Context, ReconcilerAction};
 use kube_runtime::Controller;
 use tokio::time::Duration;
 
-mod finalizer;
 mod models;
-mod workload_assignment;
+mod controllers;
 
 use models::workload_assignment::WorkloadAssignment;
+use controllers::workload_assignment;
 
 #[tokio::main]
 async fn main() {
@@ -104,10 +104,10 @@ async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<Con
 
             // Apply the finalizer first. If that fails, the `?` operator invokes automatic conversion
             // of `kube::Error` to the `Error` defined in this crate.
-            finalizer::add(client.clone(), &name, &namespace).await?;
+            workload_assignment::add_finalizer_record(client.clone(), &name, &namespace).await?;
 
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` WorkloadAssignment service pods.
-            workload_assignment::deploy(client, &workload_assignment.name(), &namespace).await?;
+            workload_assignment::create_deployment(client, &workload_assignment.name(), &namespace).await?;
 
             Ok(ReconcilerAction {
                 // Finalizer is added, deployment is deployed, re-check in 10 seconds.
@@ -119,15 +119,17 @@ async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<Con
             // Deletes any subresources related to this `WorkloadAssignment` resources. If and only if all subresources
             // are deleted, the finalizer is removed and Kubernetes is free to remove the `WorkloadAssignment` resource.
 
-            //First, delete the deployment. If there is any error deleting the deployment, it is
+            // First, delete the deployment. If there is any error deleting the deployment, it is
             // automatically converted into `Error` defined in this crate and the reconciliation is ended
             // with that error.
-            // Note: A more advanced implementation would for the Deployment's existence.
-            workload_assignment::delete(client.clone(), &workload_assignment.name(), &namespace).await?;
+
+            // Note: A more advanced implementation would check for the Deployment's existence.
+            workload_assignment::delete_deployment(client.clone(), &workload_assignment.name(), &namespace).await?;
 
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `WorkloadAssignment` resource.
-            finalizer::delete(client, &workload_assignment.name(), &namespace).await?;
+            workload_assignment::delete_finalizer_record(client, &workload_assignment.name(), &namespace).await?;
+
             Ok(ReconcilerAction {
                 requeue_after: None, // Makes no sense to delete after a successful delete, as the resource is gone
             })
