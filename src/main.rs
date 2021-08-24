@@ -1,3 +1,4 @@
+use controllers::workload_assignment::WorkloadAssignmentController;
 use futures::stream::StreamExt;
 use kube::Resource;
 use kube::ResourceExt;
@@ -8,10 +9,11 @@ use tokio::time::Duration;
 
 mod models;
 mod controllers;
-mod reconcilers;
+mod workflows;
 
 use models::workload_assignment::WorkloadAssignment;
 use controllers::workload_assignment;
+use workflows::gitops::GitopsWorkflow;
 
 #[tokio::main]
 async fn main() {
@@ -49,8 +51,7 @@ async fn main() {
 
 /// Context injected with each `reconcile` and `on_error` method invocation.
 struct ContextData {
-    /// Kubernetes client to make Kubernetes API requests with. Required for K8S resource management.
-    client: Client,
+    controller: WorkloadAssignmentController
 }
 
 impl ContextData {
@@ -60,7 +61,8 @@ impl ContextData {
     /// - `client`: A Kubernetes client to make Kubernetes REST API requests with. Resources
     /// will be created and deleted with this client.
     pub fn new(client: Client) -> Self {
-        ContextData { client }
+        let controller = WorkloadAssignmentController::new(client);
+        ContextData { controller }
     }
 }
 
@@ -75,7 +77,7 @@ enum Action {
 }
 
 async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<ContextData>) -> Result<ReconcilerAction, Error> {
-    let client: Client = context.get_ref().client.clone(); // The `Client` is shared -> a clone from the reference is obtained
+    let workload_assignment_controller = &context.get_ref().controller; // The `Client` is shared -> a clone from the reference is obtained
 
     // The resource of `WorkloadAssignment` kind is required to have a namespace set. However, it is not guaranteed
     // the resource will have a `namespace` set. Therefore, the `namespace` field on object's metadata
@@ -105,10 +107,10 @@ async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<Con
 
             // Apply the finalizer first. If that fails, the `?` operator invokes automatic conversion
             // of `kube::Error` to the `Error` defined in this crate.
-            workload_assignment::add_finalizer_record(client.clone(), &name, &namespace).await?;
+            workload_assignment_controller.add_finalizer_record(&name, &namespace).await?;
 
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` WorkloadAssignment service pods.
-            workload_assignment::create_deployment(client, &workload_assignment.name(), &namespace).await?;
+            workload_assignment_controller.create_deployment(&workload_assignment.name(), &namespace).await?;
 
             Ok(ReconcilerAction {
                 // Finalizer is added, deployment is deployed, re-check in 10 seconds.
@@ -125,11 +127,11 @@ async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<Con
             // with that error.
 
             // Note: A more advanced implementation would check for the Deployment's existence.
-            workload_assignment::delete_deployment(client.clone(), &workload_assignment.name(), &namespace).await?;
+            workload_assignment_controller.delete_deployment(&workload_assignment.name(), &namespace).await?;
 
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `WorkloadAssignment` resource.
-            workload_assignment::delete_finalizer_record(client, &workload_assignment.name(), &namespace).await?;
+            workload_assignment_controller.delete_finalizer_record(&workload_assignment.name(), &namespace).await?;
 
             Ok(ReconcilerAction {
                 requeue_after: None, // Makes no sense to delete after a successful delete, as the resource is gone

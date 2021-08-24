@@ -6,5 +6,5 @@ use super::template_spec::TemplateSpec;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
 pub struct TemplatesSpec {
     pub deployment: TemplateSpec,
-    pub global: TemplateSpec,
+    pub global: Option<TemplateSpec>,
 }
