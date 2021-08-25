@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 futures = "~0.3"
+git2 = "~0.13"
 kube = { version = "~0.57", default-features = true, features = ["derive"] } # Library for talking to Kubernetes API
 kube-derive = "~0.57" # Support for Custom Resource Definitions
 kube-runtime = "~0.57" # Custom controller support
@@ -14,5 +15,9 @@ regex = "~1.5"
 serde = "~1.0"
 serde_json = "~1.0"
 schemars = "~0.8"
+tempfile = "~3.2"
 thiserror = "~1.0" # Custom Error definitions and convenient error mappings
 tokio = { version = "~1.0", features = ["macros", "rt-multi-thread"] } # Macros for easy project setup and testing, multi-threaded runtime for best utilization of resources
+
+[dev-dependencies]
+tokio-test = "~0.4"

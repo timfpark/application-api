@@ -3,4 +3,5 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
 pub struct TemplateSpec {
     pub source: String,
+    pub path: String
 }

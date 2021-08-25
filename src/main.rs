@@ -7,13 +7,16 @@ use kube_runtime::controller::{Context, ReconcilerAction};
 use kube_runtime::Controller;
 use tokio::time::Duration;
 
-mod models;
 mod controllers;
+mod models;
 mod workflows;
+mod utils;
 
-use models::workload_assignment::WorkloadAssignment;
 use controllers::workload_assignment;
+use models::workload_assignment::WorkloadAssignment;
+use utils::error::Error;
 use workflows::gitops::GitopsWorkflow;
+
 
 #[tokio::main]
 async fn main() {
@@ -177,18 +180,4 @@ fn on_error(error: &Error, _context: Context<ContextData>) -> ReconcilerAction {
     ReconcilerAction {
         requeue_after: Some(Duration::from_secs(5)),
     }
-}
-
-/// All errors possible to occur during reconciliation
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    /// Any error originating from the `kube-rs` crate
-    #[error("Kubernetes reported error: {source}")]
-    KubeError {
-        #[from]
-        source: kube::Error,
-    },
-    /// Error in user input or WorkloadAssignment resource definition, typically missing fields.
-    #[error("Invalid WorkloadAssignment CRD: {0}")]
-    UserInputError(String),
 }
