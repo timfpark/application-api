@@ -86,8 +86,16 @@ impl WorkloadAssignmentController {
     pub async fn delete_deployment(&self, name: &str, namespace: &str) -> Result<(), Error> {
         println!("Workload delete_deployment");
 
-        // let api: Api<Deployment> = Api::namespaced(client, namespace);
-        // api.delete(name, &DeleteParams::default()).await?;
+        let workload_api: Api<Workload> = Api::namespaced(self.client.clone(), namespace);
+        let workload_assignment_api: Api<WorkloadAssignment> = Api::namespaced(self.client.clone(), namespace);
+
+        let workload_assignment = workload_assignment_api.get(name).await?;
+        println!("{:?}", workload_assignment);
+
+        let workload = workload_api.get(&workload_assignment.spec.workload).await?;
+        println!("{:?}", workload);
+
+        self.workflow.delete_deployment(&workload, &workload_assignment).await?;
 
         Ok(())
     }

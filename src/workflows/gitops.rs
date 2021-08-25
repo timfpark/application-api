@@ -13,4 +13,10 @@ impl GitopsWorkflow {
 
         Ok(())
     }
+
+    pub async fn delete_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
+        println!("gitopsworkflow: delete_deployment");
+
+        Ok(())
+    }
 }
