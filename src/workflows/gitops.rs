@@ -1,12 +1,15 @@
 use git2::{Cred, RemoteCallbacks, Repository};
 use git2::build::RepoBuilder;
+use std::collections::HashMap;
 use std::env;
+use std::fs::{create_dir, create_dir_all, remove_dir_all};
 use std::path::Path;
 use std::thread;
 use tempfile::tempdir;
 
 use crate::models::workload::Workload;
 use crate::models::workload_assignment::WorkloadAssignment;
+use crate::utils::render::render;
 use crate::utils::error::Error;
 
 pub struct GitopsWorkflow {
@@ -49,7 +52,7 @@ impl GitopsWorkflow {
         println!("deployment_repo {:?}", repo_path);
         let mut repo_builder = self.get_repo_builder();
 
-        return repo_builder.clone(&workload.spec.templates.deployment.source, repo_path);
+        return repo_builder.clone(&workload.spec.templates.cluster.source, repo_path);
     }
 
     fn clone_workload_gitops_repo(&self) -> Result<Repository, git2::Error> {
@@ -63,7 +66,12 @@ impl GitopsWorkflow {
         return repo_builder.clone(&self.workload_repo_url, repo_path);
     }
 
-    pub async fn create_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
+    pub fn link(&self, cluster_path: &Path) {
+        // read all directory names (aka workloads)
+        // create kustomization that will descend them all
+    }
+
+    pub fn create_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
         println!("gitopsworkflow: create_deployment");
 
         // clone app repo specified by workload.spec.templates.deployment.source
@@ -72,22 +80,45 @@ impl GitopsWorkflow {
         // clone workload cluster gitops repo specified by workload_repo_url
         let workload_gitops_repo = self.clone_workload_gitops_repo()?;
 
-        // pass (app repo + path) into renderer with workload and cluster
-        // renderer templates deployment with variables and returns path
+        let template_path = Path::new(workload_deployment_repo.path()).join(&workload.spec.templates.cluster.path);
 
-        // copy workload subdirectory at templated path into workload cluster gitops repo at cluster path
-        // link subdirectory into kustomization
+        let cluster_path = Path::new(workload_gitops_repo.path())
+                                        .join("workloads")
+                                        .join(&workload_assignment.spec.cluster);
+
+        let output_path = cluster_path.join(&workload_assignment.spec.workload);
+
+        create_dir_all(&output_path)?;
+        remove_dir_all(&output_path)?;
+        create_dir(&output_path)?;
+
+        // build global template variables
+        let mut values: HashMap<&str, &str> = HashMap::new();
+        values.insert("cluster_name", &workload_assignment.spec.cluster);
+
+        render(&template_path, &output_path, &values)?;
+
+        self.link(&cluster_path);
+
         // add and commit workload cluster gitops repo
+        // see https://zsiciarz.github.io/24daysofrust/book/vol2/day16.html
 
         Ok(())
     }
 
-    pub async fn delete_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
+    pub fn delete_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
         println!("gitopsworkflow: delete_deployment");
 
         // clone workload cluster gitops repo specified by workload_repo_url
+        let workload_gitops_repo = self.clone_workload_gitops_repo()?;
 
         // delete workload path in workload cluster gitops repo
+        let output_path = Path::new(workload_gitops_repo.path())
+                                       .join("workloads")
+                                       .join(&workload_assignment.spec.cluster)
+                                       .join(&workload_assignment.spec.workload);
+
+        remove_dir_all(&output_path)?;
 
         // add deleted files and make commit
 
@@ -95,7 +126,7 @@ impl GitopsWorkflow {
     }
 }
 
-
+/*
 #[cfg(test)]
 mod tests {
     use kube::core::metadata::ObjectMeta;
@@ -106,7 +137,7 @@ mod tests {
 
     use super::GitopsWorkflow;
 
-    #[tokio::test]
+    #[test]
     async fn can_create_deployment() {
         std::thread::spawn(|| {
             let workflow = GitopsWorkflow {
@@ -159,3 +190,4 @@ mod tests {
         }).join().expect("Thread panicked")
     }
 }
+*/

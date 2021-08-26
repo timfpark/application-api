@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 futures = "~0.3"
 git2 = "~0.13"
+handlebars = "~4.1"
 kube = { version = "~0.57", default-features = true, features = ["derive"] } # Library for talking to Kubernetes API
 kube-derive = "~0.57" # Support for Custom Resource Definitions
 kube-runtime = "~0.57" # Custom controller support

@@ -70,7 +70,7 @@ impl WorkloadAssignmentController {
         let workload = workload_api.get(&workload_assignment.spec.workload).await?;
         println!("{:?}", workload);
 
-        self.workflow.create_deployment(&workload, &workload_assignment).await?;
+        self.workflow.create_deployment(&workload, &workload_assignment)?;
 
         Ok(())
     }
@@ -95,7 +95,7 @@ impl WorkloadAssignmentController {
         let workload = workload_api.get(&workload_assignment.spec.workload).await?;
         println!("{:?}", workload);
 
-        self.workflow.delete_deployment(&workload, &workload_assignment).await?;
+        self.workflow.delete_deployment(&workload, &workload_assignment)?;
 
         Ok(())
     }

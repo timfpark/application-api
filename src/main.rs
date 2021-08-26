@@ -12,11 +12,8 @@ mod models;
 mod workflows;
 mod utils;
 
-use controllers::workload_assignment;
 use models::workload_assignment::WorkloadAssignment;
 use utils::error::Error;
-use workflows::gitops::GitopsWorkflow;
-
 
 #[tokio::main]
 async fn main() {

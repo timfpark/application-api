@@ -28,13 +28,13 @@ spec:
                               templates: # templates define the resources that are deployed
                                   type: object
                                   properties:
-                                      deployment: # deployment templates are deployed for each cluster
+                                      cluster: # deployment templates are deployed for each cluster
                                           type: object
                                           properties:
                                               source:
                                                   type: string
                                               path:
                                                   type: string
-                                          required: ["source"]
-                                  required: ["deployment"]
+                                          required: ["source", "path"]
+                                  required: ["cluster"]
                           required: ["templates"]
