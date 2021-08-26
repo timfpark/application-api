@@ -7,7 +7,6 @@ use crate::utils::error::Error;
 #[allow(dead_code)]
 pub fn render(template_path: &Path, output_path: &Path, values: &HashMap<&str, &str>) -> Result<u32, Error> {
     let entries = std::fs::read_dir(template_path)?;
-    println!("entries: {:?}", entries);
 
     let mut files_rendered = 0;
 
@@ -16,6 +15,7 @@ pub fn render(template_path: &Path, output_path: &Path, values: &HashMap<&str, &
         let file_type = entry.file_type()?;
 
         let entry_template_path = entry.path();
+
         let entry_output_path = Path::new(&output_path).join(entry.file_name());
 
         if file_type.is_dir() {

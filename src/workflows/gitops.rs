@@ -44,46 +44,92 @@ impl GitopsWorkflow {
         builder
     }
 
-    fn clone_deployment_repo(&self, workload: &Workload) -> Result<Repository, git2::Error> {
+    fn clone_deployment_repo(&self, workload: &Workload) -> Result<Repository, Error> {
         // let temp_dir = tempdir()?;
         // let repo_path = temp_dir.path();
 
-        let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/deployment");
-        println!("deployment_repo {:?}", repo_path);
+        let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/app");
+
+        std::fs::create_dir_all(repo_path).unwrap();
+        std::fs::remove_dir_all(repo_path).unwrap();
+        std::fs::create_dir_all(repo_path).unwrap();
+
         let mut repo_builder = self.get_repo_builder();
 
-        return repo_builder.clone(&workload.spec.templates.cluster.source, repo_path);
+        match repo_builder.clone(&workload.spec.templates.cluster.source, repo_path) {
+            Ok(repo) => { Ok(repo) },
+            Err(err) => { Err(Error::GitError { source: err } ) }
+        }
     }
 
-    fn clone_workload_gitops_repo(&self) -> Result<Repository, git2::Error> {
+    fn clone_workload_gitops_repo(&self) -> Result<Repository, Error> {
         // let temp_path = env::temp_dir();
         // let repo_path = Path::new(&temp_path).join(&self.workload_repo_url);
 
         let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/workload");
-        println!("workload_repo {:?}", repo_path);
+
+        std::fs::create_dir_all(repo_path).unwrap();
+        std::fs::remove_dir_all(repo_path).unwrap();
+        std::fs::create_dir_all(repo_path).unwrap();
+
         let mut repo_builder = self.get_repo_builder();
 
-        return repo_builder.clone(&self.workload_repo_url, repo_path);
+        match repo_builder.clone(&self.workload_repo_url, repo_path) {
+            Ok(repo) => {
+                Ok(repo)
+            },
+            Err(err) => {
+                Err(Error::GitError { source: err } )
+            }
+        }
     }
 
-    pub fn link(&self, cluster_path: &Path) {
+    pub fn link(&self, cluster_path: &Path) -> Result<(), Error> {
         // read all directory names (aka workloads)
-        // create kustomization that will descend them all
+        let entries = std::fs::read_dir(cluster_path)?;
+
+        let mut workloads = Vec::new();
+        for entry_result in entries {
+            let entry = entry_result?;
+            let file_type = entry.file_type()?;
+
+            if file_type.is_dir() {
+                workloads.push(entry.file_name());
+            }
+        }
+
+        let workload_list: String = workloads.into_iter().map(|workload| {
+            let display_string = workload.to_string_lossy();
+            format!("- {}\n", display_string)
+        }).collect();
+        let kustomization =
+format!("apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+{}
+", workload_list);
+
+        let kustomize_path = cluster_path.join("kustomization.yaml");
+
+        std::fs::write(kustomize_path, kustomization.as_bytes())?;
+
+        Ok(())
     }
 
     pub fn create_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
-        println!("gitopsworkflow: create_deployment");
-
         // clone app repo specified by workload.spec.templates.deployment.source
         let workload_deployment_repo = self.clone_deployment_repo(workload)?;
 
         // clone workload cluster gitops repo specified by workload_repo_url
         let workload_gitops_repo = self.clone_workload_gitops_repo()?;
 
-        let template_path = Path::new(workload_deployment_repo.path()).join(&workload.spec.templates.cluster.path);
+        let template_path = Path::new(workload_deployment_repo.path())
+                                        .join("..")
+                                        .join(&workload.spec.templates.cluster.path);
 
         let cluster_path = Path::new(workload_gitops_repo.path())
-                                        .join("workloads")
+                                        .join("..") // path() points to .git -> backout one level
+                                        .join("workloads") // TODO: should be less opinionated / more configurable about where workloads go
                                         .join(&workload_assignment.spec.cluster);
 
         let output_path = cluster_path.join(&workload_assignment.spec.workload);
@@ -94,11 +140,11 @@ impl GitopsWorkflow {
 
         // build global template variables
         let mut values: HashMap<&str, &str> = HashMap::new();
-        values.insert("cluster_name", &workload_assignment.spec.cluster);
+        values.insert("CLUSTER_NAME", &workload_assignment.spec.cluster);
 
         render(&template_path, &output_path, &values)?;
 
-        self.link(&cluster_path);
+        self.link(&cluster_path)?;
 
         // add and commit workload cluster gitops repo
         // see https://zsiciarz.github.io/24daysofrust/book/vol2/day16.html
@@ -126,7 +172,6 @@ impl GitopsWorkflow {
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use kube::core::metadata::ObjectMeta;
@@ -138,56 +183,51 @@ mod tests {
     use super::GitopsWorkflow;
 
     #[test]
-    async fn can_create_deployment() {
-        std::thread::spawn(|| {
-            let workflow = GitopsWorkflow {
-                workload_repo_url: "https://github.com/timfpark/workload-gitops".to_string()
-            };
+    fn can_create_deployment() {
+        let workflow = GitopsWorkflow {
+            workload_repo_url: "https://github.com/timfpark/workload-gitops".to_string()
+        };
 
-            let workload = Workload {
-                api_version: "v1".to_string(),
-                kind: "Workload".to_string(),
-                metadata: ObjectMeta {
-                    name: Some("test-workload".to_string()),
-                    namespace: Some("default".to_string()),
-                    ..ObjectMeta::default()
-                },
-                spec: WorkloadSpec {
-                    templates: TemplatesSpec {
-                        deployment: TemplateSpec {
-                            source: "https://github.com/timfpark/cluster-agent".to_string(),
-                            path: "deployment".to_string()
-                        },
+        let workload = Workload {
+            api_version: "v1".to_string(),
+            kind: "Workload".to_string(),
+            metadata: ObjectMeta {
+                name: Some("cluster-agent".to_string()),
+                namespace: Some("default".to_string()),
+                ..ObjectMeta::default()
+            },
+            spec: WorkloadSpec {
+                templates: TemplatesSpec {
+                    cluster: TemplateSpec {
+                        source: "https://github.com/timfpark/cluster-agent".to_string(),
+                        path: "templates/deployment".to_string()
+                    },
 
-                        global: None
-                    }
+                    global: None
                 }
-            };
+            }
+        };
 
-            let workload_assignment = WorkloadAssignment {
-                api_version: "v1".to_string(),
-                kind: "WorkloadAssignment".to_string(),
-                metadata: ObjectMeta {
-                    name: Some("test-workload-assignment".to_string()),
-                    namespace: Some("default".to_string()),
-                    ..ObjectMeta::default()
-                },
-                spec: WorkloadAssignmentSpec {
-                    cluster: "azure-eastus2-1".to_string(),
-                    workload: "test-workload".to_string()
-                }
-            };
+        let workload_assignment = WorkloadAssignment {
+            api_version: "v1".to_string(),
+            kind: "WorkloadAssignment".to_string(),
+            metadata: ObjectMeta {
+                name: Some("azure-eastus-1-cluster-agent".to_string()),
+                namespace: Some("default".to_string()),
+                ..ObjectMeta::default()
+            },
+            spec: WorkloadAssignmentSpec {
+                cluster: "azure-eastus2-1".to_string(),
+                workload: "cluster-agent".to_string()
+            }
+        };
 
-            tokio_test::block_on(async {
-                match workflow.create_deployment(&workload, &workload_assignment).await {
-                    Err(err) => {
-                        eprintln!("create deployment failed with: {:?}", err);
-                        assert_eq!(false, true);
-                    }
-                    _ => {}
-                }
-            })
-        }).join().expect("Thread panicked")
+        match workflow.create_deployment(&workload, &workload_assignment) {
+            Err(err) => {
+                eprintln!("create deployment failed with: {:?}", err);
+                assert_eq!(false, true);
+            }
+            Ok(_) => {}
+        }
     }
 }
-*/
