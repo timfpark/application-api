@@ -2,8 +2,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use handlebars::Handlebars;
 
+use crate::utils::error::Error;
+
 #[allow(dead_code)]
-pub fn render(template_path: &Path, output_path: &Path, values: &HashMap<&str, &str>) -> Result<u32, std::io::Error> {
+pub fn render(template_path: &Path, output_path: &Path, values: &HashMap<&str, &str>) -> Result<u32, Error> {
     let entries = std::fs::read_dir(template_path)?;
     println!("entries: {:?}", entries);
 
@@ -25,7 +27,7 @@ pub fn render(template_path: &Path, output_path: &Path, values: &HashMap<&str, &
 
             let rendered_file = match handlebars.render("template", values) {
                 Ok(rendered_file) => rendered_file,
-                Err(err) => return Err(std::io::Error::from_raw_os_error(34))
+                Err(err) => return Err(Error::RenderError { source: err } )
             };
 
             std::fs::write(entry_output_path, rendered_file.as_bytes())?;

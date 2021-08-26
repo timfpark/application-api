@@ -1,3 +1,5 @@
+use tokio::runtime::Handle;
+
 /// Utility enum that covers all possible errors during reconciliation
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -22,6 +24,11 @@ pub enum Error {
     IoError {
         #[from]
         source: std::io::Error,
-    }
+    },
 
+    #[error("Render error: {source}")]
+    RenderError {
+        #[from]
+        source: handlebars::RenderError
+    }
 }
