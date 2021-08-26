@@ -19,9 +19,7 @@ pub struct WorkloadAssignmentController {
 
 impl WorkloadAssignmentController {
     pub fn new(client: Client) -> Self {
-        let workflow = GitopsWorkflow {
-            workload_repo_url: "https://github.com/timfpark/workload-gitops".to_string()
-        };
+        let workflow = GitopsWorkflow::new("https://github.com/timfpark/workload-gitops").unwrap();
 
         WorkloadAssignmentController { client: client.clone(), workflow }
     }

@@ -2,9 +2,8 @@ use git2::{Cred, RemoteCallbacks, Repository};
 use git2::build::RepoBuilder;
 use std::collections::HashMap;
 use std::env;
-use std::fs::{create_dir, create_dir_all, remove_dir_all};
+use std::fs::{create_dir_all, remove_dir_all};
 use std::path::Path;
-use std::thread;
 use tempfile::tempdir;
 
 use crate::models::workload::Workload;
@@ -14,9 +13,21 @@ use crate::utils::error::Error;
 
 pub struct GitopsWorkflow {
     pub workload_repo_url: String,
+
+    pub deployment_temp_dir: tempfile::TempDir,
+    pub gitops_temp_dir: tempfile::TempDir
 }
 
 impl GitopsWorkflow {
+    pub fn new(workload_repo_url: &str) -> Result<GitopsWorkflow, Error> {
+        return Ok(GitopsWorkflow {
+            workload_repo_url: workload_repo_url.to_string(),
+
+            deployment_temp_dir: tempdir()?,
+            gitops_temp_dir: tempdir()?
+        })
+    }
+
     fn get_repo_builder(&self) -> RepoBuilder {
         // Prepare callbacks.
         let mut callbacks = RemoteCallbacks::new();
@@ -45,36 +56,34 @@ impl GitopsWorkflow {
     }
 
     fn clone_deployment_repo(&self, workload: &Workload) -> Result<Repository, Error> {
-        // let temp_dir = tempdir()?;
-        // let repo_path = temp_dir.path();
+        let repo_path = self.deployment_temp_dir.path().join("template");
 
-        let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/app");
+        // let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/app");
 
-        std::fs::create_dir_all(repo_path).unwrap();
-        std::fs::remove_dir_all(repo_path).unwrap();
-        std::fs::create_dir_all(repo_path).unwrap();
+        // std::fs::create_dir_all(&repo_path).unwrap();
+        // std::fs::remove_dir_all(&repo_path).unwrap();
+        // std::fs::create_dir_all(&repo_path).unwrap();
 
         let mut repo_builder = self.get_repo_builder();
 
-        match repo_builder.clone(&workload.spec.templates.cluster.source, repo_path) {
+        match repo_builder.clone(&workload.spec.templates.cluster.source, &repo_path) {
             Ok(repo) => { Ok(repo) },
             Err(err) => { Err(Error::GitError { source: err } ) }
         }
     }
 
     fn clone_workload_gitops_repo(&self) -> Result<Repository, Error> {
-        // let temp_path = env::temp_dir();
-        // let repo_path = Path::new(&temp_path).join(&self.workload_repo_url);
+        let repo_path = self.gitops_temp_dir.path().join("gitops");
 
-        let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/workload");
+        // let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/workload");
 
-        std::fs::create_dir_all(repo_path).unwrap();
-        std::fs::remove_dir_all(repo_path).unwrap();
-        std::fs::create_dir_all(repo_path).unwrap();
+        // std::fs::create_dir_all(&repo_path).unwrap();
+        // std::fs::remove_dir_all(&repo_path).unwrap();
+        // std::fs::create_dir_all(&repo_path).unwrap();
 
         let mut repo_builder = self.get_repo_builder();
 
-        match repo_builder.clone(&self.workload_repo_url, repo_path) {
+        match repo_builder.clone(&self.workload_repo_url, &repo_path) {
             Ok(repo) => {
                 Ok(repo)
             },
@@ -123,20 +132,21 @@ resources:
         // clone workload cluster gitops repo specified by workload_repo_url
         let workload_gitops_repo = self.clone_workload_gitops_repo()?;
 
-        let template_path = Path::new(workload_deployment_repo.path())
-                                        .join("..")
+        let template_path = Path::new(workload_deployment_repo.path()).parent().unwrap()
                                         .join(&workload.spec.templates.cluster.path);
 
-        let cluster_path = Path::new(workload_gitops_repo.path())
-                                        .join("..") // path() points to .git -> backout one level
+        let cluster_path = Path::new(workload_gitops_repo.path()).parent().unwrap()
                                         .join("workloads") // TODO: should be less opinionated / more configurable about where workloads go
                                         .join(&workload_assignment.spec.cluster);
 
         let output_path = cluster_path.join(&workload_assignment.spec.workload);
 
+        println!("output path: {:?}", output_path);
+
+        // clear out any old version of this workload in gitops repo
         create_dir_all(&output_path)?;
         remove_dir_all(&output_path)?;
-        create_dir(&output_path)?;
+        create_dir_all(&output_path)?;
 
         // build global template variables
         let mut values: HashMap<&str, &str> = HashMap::new();
@@ -175,6 +185,7 @@ resources:
 #[cfg(test)]
 mod tests {
     use kube::core::metadata::ObjectMeta;
+
     use crate::models::templates_spec::TemplatesSpec;
     use crate::models::template_spec::TemplateSpec;
     use crate::models::workload::{Workload, WorkloadSpec};
@@ -184,9 +195,7 @@ mod tests {
 
     #[test]
     fn can_create_deployment() {
-        let workflow = GitopsWorkflow {
-            workload_repo_url: "https://github.com/timfpark/workload-gitops".to_string()
-        };
+        let workflow = GitopsWorkflow::new("https://github.com/timfpark/workload-gitops").unwrap();
 
         let workload = Workload {
             api_version: "v1".to_string(),

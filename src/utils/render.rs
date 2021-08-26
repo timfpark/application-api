@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs::{create_dir_all};
 use std::path::Path;
 use handlebars::Handlebars;
 
@@ -6,7 +7,12 @@ use crate::utils::error::Error;
 
 #[allow(dead_code)]
 pub fn render(template_path: &Path, output_path: &Path, values: &HashMap<&str, &str>) -> Result<u32, Error> {
+    create_dir_all(&output_path)?;
+
+    println!("in render: {:?}", template_path);
     let entries = std::fs::read_dir(template_path)?;
+
+    println!("fails before here");
 
     let mut files_rendered = 0;
 
@@ -15,8 +21,9 @@ pub fn render(template_path: &Path, output_path: &Path, values: &HashMap<&str, &
         let file_type = entry.file_type()?;
 
         let entry_template_path = entry.path();
-
+        println!("entry_template_path: {:?}", entry_template_path);
         let entry_output_path = Path::new(&output_path).join(entry.file_name());
+        println!("entry_output_path: {:?}", entry_output_path);
 
         if file_type.is_dir() {
             files_rendered += render(&entry_template_path, &entry_output_path, values)?;
