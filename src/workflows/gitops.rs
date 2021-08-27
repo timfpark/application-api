@@ -1,5 +1,6 @@
-use git2::{Commit, Cred, ObjectType, Direction, Index, Oid, PushOptions, RemoteCallbacks, Repository, Signature};
+use git2::{Cred, ObjectType, Direction, Index, Oid, PushOptions, RemoteCallbacks, Repository, Signature};
 use git2::build::RepoBuilder;
+use handlebars::Handlebars;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{create_dir_all, remove_dir_all};
@@ -8,7 +9,6 @@ use tempfile::tempdir;
 
 use crate::models::workload::Workload;
 use crate::models::workload_assignment::WorkloadAssignment;
-use crate::utils::render::render;
 use crate::utils::error::Error;
 
 pub struct GitopsWorkflow {
@@ -98,7 +98,47 @@ impl GitopsWorkflow {
         }
     }
 
-    pub fn link(&self, cluster_path: &Path) -> Result<(), Error> {
+    fn render(&self, template_path: &Path, repo_root_path: &Path, root_relative_path: &Path, values: &HashMap<&str, &str>) -> Result<Vec<PathBuf>, Error> {
+        let mut paths = Vec::new();
+
+        let output_path = repo_root_path.join(root_relative_path);
+        create_dir_all(&output_path)?;
+
+        let entries = std::fs::read_dir(template_path)?;
+
+        for entry_result in entries {
+            let entry = entry_result?;
+            let file_type = entry.file_type()?;
+
+            let entry_template_path = entry.path();
+
+            let output_relative_path = Path::new(root_relative_path).join(entry.file_name());
+            let output_absolute_path = Path::new(&repo_root_path).join(&output_relative_path);
+
+            if file_type.is_dir() {
+                let mut subpaths = self.render(&entry_template_path, repo_root_path, &output_relative_path, values)?;
+                paths.append(&mut subpaths);
+            } else {
+                println!("adding path to list {:?}", output_relative_path);
+                paths.push(output_relative_path);
+
+                let template = std::fs::read_to_string(entry_template_path)?;
+                let mut handlebars = Handlebars::new();
+                handlebars.register_template_string("template", template).unwrap();
+
+                let rendered_file = match handlebars.render("template", values) {
+                    Ok(rendered_file) => rendered_file,
+                    Err(err) => return Err(Error::RenderError { source: err } )
+                };
+
+                std::fs::write(output_absolute_path, rendered_file.as_bytes())?;
+            }
+        }
+
+        Ok(paths)
+    }
+
+    fn link(&self, cluster_path: &Path) -> Result<(), Error> {
         // read all directory names (aka workloads)
         let entries = std::fs::read_dir(cluster_path)?;
 
@@ -198,7 +238,6 @@ impl GitopsWorkflow {
         let cluster_path = workload_gitops_repo_path.join(&cluster_relative_path);
 
         let output_relative_path = cluster_relative_path.join(&workload_assignment.spec.workload);
-        let output_path = workload_gitops_repo_path.join(&output_relative_path);
 
         println!("output_relative_path: {:?}", output_relative_path);
 
@@ -210,7 +249,7 @@ impl GitopsWorkflow {
         values.insert("CLUSTER_NAME", &workload_assignment.spec.cluster);
 
         //
-        let mut paths = render(&template_path, workload_gitops_repo_path, &output_relative_path, &values)?;
+        let mut paths = self.render(&template_path, workload_gitops_repo_path, &output_relative_path, &values)?;
         self.link(&cluster_path)?;
 
         let kustomization_path = cluster_relative_path.join("kustomization.yaml");
@@ -251,6 +290,8 @@ impl GitopsWorkflow {
 #[cfg(test)]
 mod tests {
     use kube::core::metadata::ObjectMeta;
+    use std::collections::HashMap;
+    use std::path::Path;
 
     use crate::models::templates_spec::TemplatesSpec;
     use crate::models::template_spec::TemplateSpec;
@@ -304,5 +345,24 @@ mod tests {
             }
             Ok(_) => {}
         }
+    }
+
+    #[test]
+    fn can_render_workload() {
+        let workflow = GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
+
+        let mut values: HashMap<&str, &str> = HashMap::new();
+        values.insert("CLUSTER_NAME", "my-cluster");
+
+        let template_path = Path::new("./fixtures/template");
+        let repo_root_path = Path::new("./fixtures/");
+        let root_relative_path = Path::new("workloads/my-cluster");
+        let output_path = repo_root_path.join(root_relative_path);
+
+        std::fs::create_dir_all(output_path).unwrap();
+
+        let paths = workflow.render(template_path, repo_root_path, root_relative_path, &values).unwrap();
+
+        assert_eq!(paths.len(), 2);
     }
 }
