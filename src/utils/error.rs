@@ -1,5 +1,3 @@
-use tokio::runtime::Handle;
-
 /// Utility enum that covers all possible errors during reconciliation
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

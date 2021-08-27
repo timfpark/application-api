@@ -1,16 +1,11 @@
-use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
-use k8s_openapi::api::core::v1::{Container, ContainerPort, PodSpec, PodTemplateSpec};
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
-use kube::api::{DeleteParams, ListParams, ObjectMeta, PostParams, Patch, PatchParams};
+use kube::api::{Patch, PatchParams};
 use kube::{Api, Client};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
 
 use crate::models::workload::Workload;
 use crate::models::workload_assignment::WorkloadAssignment;
 use crate::utils::error::Error;
 use crate::workflows::gitops::GitopsWorkflow;
-use crate::workflows::workflow::Workflow;
 
 pub struct WorkloadAssignmentController {
     client: Client,

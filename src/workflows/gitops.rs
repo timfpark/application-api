@@ -1,4 +1,4 @@
-use git2::{Cred, RemoteCallbacks, Repository};
+use git2::{Commit, Cred, ObjectType, Direction, Oid, PushOptions, RemoteCallbacks, Repository, Signature};
 use git2::build::RepoBuilder;
 use std::collections::HashMap;
 use std::env;
@@ -28,14 +28,12 @@ impl GitopsWorkflow {
         })
     }
 
-    fn get_repo_builder(&self) -> RepoBuilder {
+    fn get_auth_callback(&self) -> RemoteCallbacks {
         // Prepare callbacks.
         let mut callbacks = RemoteCallbacks::new();
 
         // TODO: Migrate to secrets
         callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            println!("{:?}", username_from_url);
-
             Cred::ssh_key(
                 username_from_url.unwrap(),
                 None,
@@ -44,9 +42,16 @@ impl GitopsWorkflow {
             )
         });
 
+        callbacks
+    }
+
+    fn get_repo_builder(&self) -> RepoBuilder {
+
+        let auth_callback = self.get_auth_callback();
+
         // Prepare fetch options.
         let mut fetch_options = git2::FetchOptions::new();
-        fetch_options.remote_callbacks(callbacks);
+        fetch_options.remote_callbacks(auth_callback);
 
         // Prepare builder.
         let mut builder = git2::build::RepoBuilder::new();
@@ -112,11 +117,11 @@ impl GitopsWorkflow {
             format!("- {}\n", display_string)
         }).collect();
         let kustomization =
-format!("apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-{}
-", workload_list);
+    format!("apiVersion: kustomize.config.k8s.io/v1beta1
+    kind: Kustomization
+    resources:
+    {}
+    ", workload_list);
 
         let kustomize_path = cluster_path.join("kustomization.yaml");
 
@@ -125,7 +130,28 @@ resources:
         Ok(())
     }
 
-    pub fn create_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
+    fn push(&self, repo: &Repository, url: &str, branch: &str) -> Result<(), Error> {
+
+        let mut remote = match repo.find_remote("origin") {
+            Ok(r) => r,
+            Err(_) => repo.remote("origin", url)?,
+        };
+
+        let connect_auth_callback = self.get_auth_callback();
+        remote.connect_auth(Direction::Push, Some(connect_auth_callback), None)?;
+
+        let ref_spec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
+
+        let push_auth_callback = self.get_auth_callback();
+        let mut push_options = PushOptions::new();
+        push_options.remote_callbacks(push_auth_callback);
+
+        remote.push(&[ref_spec], Some(&mut push_options))?;
+
+        Ok(())
+    }
+
+    pub fn create_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<Oid, Error> {
         // clone app repo specified by workload.spec.templates.deployment.source
         let workload_deployment_repo = self.clone_deployment_repo(workload)?;
 
@@ -153,16 +179,19 @@ resources:
         values.insert("CLUSTER_NAME", &workload_assignment.spec.cluster);
 
         render(&template_path, &output_path, &values)?;
-
         self.link(&cluster_path)?;
 
-        // add and commit workload cluster gitops repo
-        // see https://zsiciarz.github.io/24daysofrust/book/vol2/day16.html
+        let message = format!("Reconciling created WorkloadAssignment {} for Workload {} for Cluster {}", workload_assignment.metadata.name.as_ref().unwrap(), workload_assignment.spec.workload, workload_assignment.spec.cluster);
+        // add and commit output path in workload cluster gitops repo
 
-        Ok(())
+        let oid = commit_subtree(&workload_gitops_repo, &output_path, &message)?;
+
+        self.push(&workload_gitops_repo, &self.workload_repo_url, "main")?;
+
+        Ok(oid)
     }
 
-    pub fn delete_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
+    pub fn delete_deployment(&self, _workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
         println!("gitopsworkflow: delete_deployment");
 
         // clone workload cluster gitops repo specified by workload_repo_url
@@ -182,6 +211,39 @@ resources:
     }
 }
 
+fn find_last_commit(repo: &Repository) -> Result<Commit, Error> {
+    let obj = repo.head()?.resolve()?.peel(ObjectType::Commit)?;
+    obj.into_commit().map_err(|_| Error::GitError { source: git2::Error::from_str("Couldn't find commit") })
+}
+
+fn commit_subtree(repo: &Repository, path: &Path, message: &str) -> Result<Oid, Error> {
+    let path_string = path.to_string_lossy();
+    let path_glob = vec![format!("{}/*", path_string)];
+
+    println!("path_glob: {:?}", path_glob);
+    println!("path_glob: {:?}", path_glob);
+
+    let mut index = repo.index()?;
+    index.add_all(path_glob, git2::IndexAddOption::DEFAULT, None)?;
+
+    let oid = index.write_tree()?;
+
+    // TODO: Add mechanism to provide identity of commits.
+    let signature = Signature::now("Workload API", "workload-api@example.com")?;
+    let parent_commit = find_last_commit(&repo)?;
+    let tree = repo.find_tree(oid)?;
+
+    repo.commit(Some("HEAD"), //  point HEAD to our new commit
+                &signature, // author
+                &signature, // committer
+                message, // commit message
+                &tree, // tree
+                &[&parent_commit])?; // parents
+
+
+    Ok(oid)
+}
+
 #[cfg(test)]
 mod tests {
     use kube::core::metadata::ObjectMeta;
@@ -195,7 +257,7 @@ mod tests {
 
     #[test]
     fn can_create_deployment() {
-        let workflow = GitopsWorkflow::new("https://github.com/timfpark/workload-gitops").unwrap();
+        let workflow = GitopsWorkflow::new("git@github.com:timfpark/workload-gitops").unwrap();
 
         let workload = Workload {
             api_version: "v1".to_string(),
@@ -208,7 +270,7 @@ mod tests {
             spec: WorkloadSpec {
                 templates: TemplatesSpec {
                     cluster: TemplateSpec {
-                        source: "https://github.com/timfpark/cluster-agent".to_string(),
+                        source: "git@github.com:timfpark/cluster-agent".to_string(),
                         path: "templates/deployment".to_string()
                     },
 
