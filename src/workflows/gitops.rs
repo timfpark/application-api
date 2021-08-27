@@ -1,9 +1,9 @@
-use git2::{Commit, Cred, ObjectType, Direction, Oid, PushOptions, RemoteCallbacks, Repository, Signature};
+use git2::{Commit, Cred, ObjectType, Direction, Index, Oid, PushOptions, RemoteCallbacks, Repository, Signature};
 use git2::build::RepoBuilder;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{create_dir_all, remove_dir_all};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 
 use crate::models::workload::Workload;
@@ -123,11 +123,40 @@ impl GitopsWorkflow {
     {}
     ", workload_list);
 
-        let kustomize_path = cluster_path.join("kustomization.yaml");
+        let kustomization_path = cluster_path.join("kustomization.yaml");
 
-        std::fs::write(kustomize_path, kustomization.as_bytes())?;
+        std::fs::write(kustomization_path, kustomization.as_bytes())?;
 
         Ok(())
+    }
+
+    fn commit_files(&self, repo: &Repository, index: &mut Index, paths: Vec<PathBuf>, message: &str) -> Result<Oid, Error> {
+       for path in paths.iter() {
+            println!("adding path to index {:?}", path);
+            index.add_path(path)?;
+        }
+
+        let oid = index.write_tree()?;
+
+        // TODO: Add mechanism to provide identity of commits.
+        let signature = Signature::now("Workload API", "workload-api@example.com")?;
+
+        let obj = repo.head()?.resolve()?.peel(ObjectType::Commit)?;
+        let parent_commit = match obj.into_commit() {
+            Ok(commit) => commit,
+            Err(_) => return Err(Error::GitError { source: git2::Error::from_str("Couldn't find commit") })
+        };
+
+        let tree = repo.find_tree(oid)?;
+
+        repo.commit(Some("HEAD"), //  point HEAD to our new commit
+                    &signature, // author
+                    &signature, // committer
+                    message, // commit message
+                    &tree, // tree
+                    &[&parent_commit])?; // parents
+
+        Ok(oid)
     }
 
     fn push(&self, repo: &Repository, url: &str, branch: &str) -> Result<(), Error> {
@@ -161,31 +190,39 @@ impl GitopsWorkflow {
         let template_path = Path::new(workload_deployment_repo.path()).parent().unwrap()
                                         .join(&workload.spec.templates.cluster.path);
 
-        let cluster_path = Path::new(workload_gitops_repo.path()).parent().unwrap()
-                                        .join("workloads") // TODO: should be less opinionated / more configurable about where workloads go
-                                        .join(&workload_assignment.spec.cluster);
+        let workload_gitops_repo_path = Path::new(workload_gitops_repo.path()).parent().unwrap();
 
-        let output_path = cluster_path.join(&workload_assignment.spec.workload);
+        // TODO: should be less opinionated / more configurable about where workloads go
+        let cluster_relative_path = Path::new("workloads")
+                                            .join(&workload_assignment.spec.cluster);
+        let cluster_path = workload_gitops_repo_path.join(&cluster_relative_path);
 
-        println!("output path: {:?}", output_path);
+        let output_relative_path = cluster_relative_path.join(&workload_assignment.spec.workload);
+        let output_path = workload_gitops_repo_path.join(&output_relative_path);
 
-        // clear out any old version of this workload in gitops repo
-        create_dir_all(&output_path)?;
-        remove_dir_all(&output_path)?;
-        create_dir_all(&output_path)?;
+        println!("output_relative_path: {:?}", output_relative_path);
+
+        let mut index = workload_gitops_repo.index()?;
+        index.remove_dir(&output_relative_path, 0)?;
 
         // build global template variables
         let mut values: HashMap<&str, &str> = HashMap::new();
         values.insert("CLUSTER_NAME", &workload_assignment.spec.cluster);
 
-        render(&template_path, &output_path, &values)?;
+        //
+        let mut paths = render(&template_path, workload_gitops_repo_path, &output_relative_path, &values)?;
         self.link(&cluster_path)?;
 
+        let kustomization_path = cluster_relative_path.join("kustomization.yaml");
+        paths.push(kustomization_path);
+
+        // ENH: Support different messages
         let message = format!("Reconciling created WorkloadAssignment {} for Workload {} for Cluster {}", workload_assignment.metadata.name.as_ref().unwrap(), workload_assignment.spec.workload, workload_assignment.spec.cluster);
+
         // add and commit output path in workload cluster gitops repo
+        let oid = self.commit_files(&workload_gitops_repo, &mut index, paths, &message)?;
 
-        let oid = commit_subtree(&workload_gitops_repo, &output_path, &message)?;
-
+        // TODO: make more flexible to support different branches
         self.push(&workload_gitops_repo, &self.workload_repo_url, "main")?;
 
         Ok(oid)
@@ -211,39 +248,6 @@ impl GitopsWorkflow {
     }
 }
 
-fn find_last_commit(repo: &Repository) -> Result<Commit, Error> {
-    let obj = repo.head()?.resolve()?.peel(ObjectType::Commit)?;
-    obj.into_commit().map_err(|_| Error::GitError { source: git2::Error::from_str("Couldn't find commit") })
-}
-
-fn commit_subtree(repo: &Repository, path: &Path, message: &str) -> Result<Oid, Error> {
-    let path_string = path.to_string_lossy();
-    let path_glob = vec![format!("{}/*", path_string)];
-
-    println!("path_glob: {:?}", path_glob);
-    println!("path_glob: {:?}", path_glob);
-
-    let mut index = repo.index()?;
-    index.add_all(path_glob, git2::IndexAddOption::DEFAULT, None)?;
-
-    let oid = index.write_tree()?;
-
-    // TODO: Add mechanism to provide identity of commits.
-    let signature = Signature::now("Workload API", "workload-api@example.com")?;
-    let parent_commit = find_last_commit(&repo)?;
-    let tree = repo.find_tree(oid)?;
-
-    repo.commit(Some("HEAD"), //  point HEAD to our new commit
-                &signature, // author
-                &signature, // committer
-                message, // commit message
-                &tree, // tree
-                &[&parent_commit])?; // parents
-
-
-    Ok(oid)
-}
-
 #[cfg(test)]
 mod tests {
     use kube::core::metadata::ObjectMeta;
@@ -257,7 +261,7 @@ mod tests {
 
     #[test]
     fn can_create_deployment() {
-        let workflow = GitopsWorkflow::new("git@github.com:timfpark/workload-gitops").unwrap();
+        let workflow = GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
 
         let workload = Workload {
             api_version: "v1".to_string(),
@@ -283,7 +287,7 @@ mod tests {
             api_version: "v1".to_string(),
             kind: "WorkloadAssignment".to_string(),
             metadata: ObjectMeta {
-                name: Some("azure-eastus-1-cluster-agent".to_string()),
+                name: Some("azure-eastus2-1-cluster-agent".to_string()),
                 namespace: Some("default".to_string()),
                 ..ObjectMeta::default()
             },
