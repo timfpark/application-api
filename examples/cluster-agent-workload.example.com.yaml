@@ -1,7 +1,7 @@
 apiVersion: example.com/v1
 kind: Workload
 metadata:
-    name: cluster-agent-workload
+    name: cluster-agent-main
     namespace: default
 spec:
     #    assignment:
@@ -9,21 +9,17 @@ spec:
     #          matching:
     #              - label: cloud
     #                value: azure
-    reconciler: gitops # specifies the mechanism used to reconcile workloads (currently only gitops supported)
+    reconciler: gitops # mechanism used to reconciling workloads (currently only gitops supported)
     templates:
-        cluster: # this template will be deployed per workload cluster assigned.
+        workload: # this template will be deployed per workload cluster assigned.
+            method: git
             source: "git@github.com:timfpark/cluster-agent" # reconciler specific identifier for a source
-            path: "deployment" # reconciler specific path within that source
-#        global: # this template will be deployed once for the whole workload on control plane
-#            source: "https://github.com/timfpark/test-workload/global"
-#    overrides:
-#        azure: # name of override
-#            matching:
-#                - label: cloud
-#                  value: azure
-#            overrides:
-#                - key: endpoint
-#                  value: db.azure.com
-#        eastus:
-#            label: region
-#            matching: eastus
+            path: "templates/deployment" # reconciler specific path within that source
+
+    #   global: # this template will be deployed once for the whole workload on control plane
+    #       source: "https://github.com/timfpark/test-workload/global"
+    #       path: "templates/deployment" # reconciler specific path within that source
+
+    values: # values used during templating
+        imageTag: 20210701T165254Z # {"$imagepolicy": "flux-system:cluster-agent-main:tag"}
+        ring: main

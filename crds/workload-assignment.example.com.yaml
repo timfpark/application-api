@@ -10,7 +10,7 @@ spec:
         plural: workloadassignments
         singular: workloadassignment
         shortNames:
-            - workloadassignment
+            - wa
     scope: Namespaced
     versions:
         - name: v1

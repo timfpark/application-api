@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -18,4 +20,5 @@ use super::templates_spec::TemplatesSpec;
 )]
 pub struct WorkloadSpec {
     pub templates: TemplatesSpec,
+    pub values: Option<HashMap<String, String>>
 }

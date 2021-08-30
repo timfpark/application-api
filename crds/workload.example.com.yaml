@@ -10,7 +10,7 @@ spec:
         plural: workloads
         singular: workload
         shortNames:
-            - workload
+            - w
     scope: Namespaced
     versions:
         - name: v1
@@ -28,13 +28,18 @@ spec:
                               templates: # templates define the resources that are deployed
                                   type: object
                                   properties:
-                                      cluster: # deployment templates are deployed for each cluster
+                                      workload: # workload template deployed for each cluster
                                           type: object
                                           properties:
+                                              method:
+                                                  type: string # defaults to git
                                               source:
                                                   type: string
                                               path:
                                                   type: string
                                           required: ["source", "path"]
-                                  required: ["cluster"]
+                                  required: ["workload"]
+                              values:
+                                  x-kubernetes-preserve-unknown-fields: true
+                                  type: object
                           required: ["templates"]

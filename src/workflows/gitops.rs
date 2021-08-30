@@ -61,15 +61,9 @@ impl GitopsWorkflow {
     fn clone_deployment_repo(&self, workload: &Workload, deployment_temp_dir: &TempDir) -> Result<Repository, Error> {
         let repo_path = deployment_temp_dir.path().join("template");
 
-        // let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/app");
-
-        // std::fs::create_dir_all(&repo_path).unwrap();
-        // std::fs::remove_dir_all(&repo_path).unwrap();
-        // std::fs::create_dir_all(&repo_path).unwrap();
-
         let mut repo_builder = self.get_repo_builder();
 
-        match repo_builder.clone(&workload.spec.templates.cluster.source, &repo_path) {
+        match repo_builder.clone(&workload.spec.templates.workload.source, &repo_path) {
             Ok(repo) => { Ok(repo) },
             Err(err) => { Err(Error::GitError { source: err } ) }
         }
@@ -77,12 +71,6 @@ impl GitopsWorkflow {
 
     fn clone_workload_gitops_repo(&self, workload_gitops_temp_dir: &TempDir) -> Result<Repository, Error> {
         let repo_path = workload_gitops_temp_dir.path().join("gitops");
-
-        // let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/workload");
-
-        // std::fs::create_dir_all(&repo_path).unwrap();
-        // std::fs::remove_dir_all(&repo_path).unwrap();
-        // std::fs::create_dir_all(&repo_path).unwrap();
 
         let mut repo_builder = self.get_repo_builder();
 
@@ -120,7 +108,7 @@ impl GitopsWorkflow {
                     paths.append(&mut subpaths);
                 }
             } else {
-                println!("adding path to list {:?}", output_relative_path);
+                // println!("adding path to list {:?}", output_relative_path);
                 paths.push(output_relative_path);
 
                 let template = std::fs::read_to_string(entry_template_path)?;
@@ -172,7 +160,7 @@ resources:
 
     fn commit_files(&self, repo: &Repository, index: &mut Index, paths: Vec<PathBuf>, message: &str) -> Result<Oid, Error> {
        for path in paths.iter() {
-            println!("adding path to index {:?}", path);
+            // println!("adding path to index {:?}", path);
             index.add_path(path)?;
         }
 
@@ -225,13 +213,13 @@ resources:
         let workload_gitops_temp_dir = tempdir()?;
 
         // clone app repo specified by workload.spec.templates.deployment.source
-        let workload_deployment_repo = self.clone_deployment_repo(workload, &deployment_temp_dir)?;
+        let workload_template_repo = self.clone_deployment_repo(workload, &deployment_temp_dir)?;
 
         // clone workload cluster gitops repo specified by workload_repo_url
         let workload_gitops_repo = self.clone_workload_gitops_repo(&workload_gitops_temp_dir)?;
 
-        let template_path = Path::new(workload_deployment_repo.path()).parent().unwrap()
-                                        .join(&workload.spec.templates.cluster.path);
+        let template_path = Path::new(workload_template_repo.path()).parent().unwrap()
+                                        .join(&workload.spec.templates.workload.path);
 
         let workload_gitops_repo_path = Path::new(workload_gitops_repo.path()).parent().unwrap();
 
@@ -242,23 +230,31 @@ resources:
 
         let output_relative_path = cluster_relative_path.join(&workload_assignment.spec.workload);
 
-        println!("output_relative_path: {:?}", output_relative_path);
-
         let mut index = workload_gitops_repo.index()?;
         index.remove_dir(&output_relative_path, 0)?;
 
-        // build global template variables
-        let mut values: HashMap<&str, &str> = HashMap::new();
-        values.insert("CLUSTER_NAME", &workload_assignment.spec.cluster);
+        // build template context variables
+        let mut template_values: HashMap<&str, &str> = HashMap::new();
+        template_values.insert("clusterName", &workload_assignment.spec.cluster);
 
-        //
-        let mut paths = self.render(&template_path, workload_gitops_repo_path, &output_relative_path, &values)?;
+        // TODO: Fetch assigned cluster when we are using Cluster API
+        template_values.insert("cloud", "azure");
+        template_values.insert("cloudRegion", "eastus2");
+
+        // add in values from Workload
+        if let Some(values) = &workload.spec.values {
+            for (key, value) in values.iter() {
+                template_values.insert(&key, &value);
+            }
+        }
+
+        let mut paths = self.render(&template_path, workload_gitops_repo_path, &output_relative_path, &template_values)?;
         self.link(&cluster_path)?;
 
         let kustomization_path = cluster_relative_path.join("kustomization.yaml");
         paths.push(kustomization_path);
 
-        // ENH: Support different messages
+        // TODO(ENH): Support different messages
         let message = format!("Reconciling created WorkloadAssignment {} for Workload {} for Cluster {}", workload_assignment.metadata.name.as_ref().unwrap(), workload_assignment.spec.workload, workload_assignment.spec.cluster);
 
         // add and commit output path in workload cluster gitops repo
@@ -308,6 +304,9 @@ mod tests {
     fn can_create_deployment() {
         let workflow = GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
 
+        let mut values: HashMap<String, String> = HashMap::new();
+        values.insert("ring".to_string(), "main".to_string());
+
         let workload = Workload {
             api_version: "v1".to_string(),
             kind: "Workload".to_string(),
@@ -318,13 +317,15 @@ mod tests {
             },
             spec: WorkloadSpec {
                 templates: TemplatesSpec {
-                    cluster: TemplateSpec {
+                    workload: TemplateSpec {
+                        method: Some("git".to_string()),
                         source: "git@github.com:timfpark/cluster-agent".to_string(),
                         path: "templates/deployment".to_string()
                     },
 
                     global: None
-                }
+                },
+                values: Some(values)
             }
         };
 
