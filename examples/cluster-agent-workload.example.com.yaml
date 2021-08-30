@@ -12,7 +12,7 @@ spec:
     reconciler: gitops # specifies the mechanism used to reconcile workloads (currently only gitops supported)
     templates:
         cluster: # this template will be deployed per workload cluster assigned.
-            source: "https://github.com/timfpark/cluster-agent" # reconciler specific identifier for a source
+            source: "git@github.com:timfpark/cluster-agent" # reconciler specific identifier for a source
             path: "deployment" # reconciler specific path within that source
 #        global: # this template will be deployed once for the whole workload on control plane
 #            source: "https://github.com/timfpark/test-workload/global"

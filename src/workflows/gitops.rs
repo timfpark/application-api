@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs::{create_dir_all, remove_dir_all};
 use std::path::{Path, PathBuf};
-use tempfile::tempdir;
+use tempfile::{TempDir, tempdir};
 
 use crate::models::workload::Workload;
 use crate::models::workload_assignment::WorkloadAssignment;
@@ -13,18 +13,12 @@ use crate::utils::error::Error;
 
 pub struct GitopsWorkflow {
     pub workload_repo_url: String,
-
-    pub deployment_temp_dir: tempfile::TempDir,
-    pub gitops_temp_dir: tempfile::TempDir
 }
 
 impl GitopsWorkflow {
     pub fn new(workload_repo_url: &str) -> Result<GitopsWorkflow, Error> {
         return Ok(GitopsWorkflow {
             workload_repo_url: workload_repo_url.to_string(),
-
-            deployment_temp_dir: tempdir()?,
-            gitops_temp_dir: tempdir()?
         })
     }
 
@@ -32,12 +26,16 @@ impl GitopsWorkflow {
         // Prepare callbacks.
         let mut callbacks = RemoteCallbacks::new();
 
+
         // TODO: Migrate to secrets
         callbacks.credentials(|_url, username_from_url, _allowed_types| {
+            let home_dir = env::var("HOME").unwrap();
+            let private_ssh_key_path = std::path::Path::new(&home_dir).join(".ssh/id_rsa");
+
             Cred::ssh_key(
                 username_from_url.unwrap(),
                 None,
-                std::path::Path::new(&format!("{}/.ssh/id_rsa", env::var("HOME").unwrap())),
+                &private_ssh_key_path,
                 None,
             )
         });
@@ -60,8 +58,8 @@ impl GitopsWorkflow {
         builder
     }
 
-    fn clone_deployment_repo(&self, workload: &Workload) -> Result<Repository, Error> {
-        let repo_path = self.deployment_temp_dir.path().join("template");
+    fn clone_deployment_repo(&self, workload: &Workload, deployment_temp_dir: &TempDir) -> Result<Repository, Error> {
+        let repo_path = deployment_temp_dir.path().join("template");
 
         // let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/app");
 
@@ -77,8 +75,8 @@ impl GitopsWorkflow {
         }
     }
 
-    fn clone_workload_gitops_repo(&self) -> Result<Repository, Error> {
-        let repo_path = self.gitops_temp_dir.path().join("gitops");
+    fn clone_workload_gitops_repo(&self, workload_gitops_temp_dir: &TempDir) -> Result<Repository, Error> {
+        let repo_path = workload_gitops_temp_dir.path().join("gitops");
 
         // let repo_path = Path::new("/Users/timothypark/dev/multicloud/test/workload");
 
@@ -109,6 +107,7 @@ impl GitopsWorkflow {
         for entry_result in entries {
             let entry = entry_result?;
             let file_type = entry.file_type()?;
+            let is_dotted_file_name = entry.file_name().to_str().unwrap().chars().next().unwrap() == '.';
 
             let entry_template_path = entry.path();
 
@@ -116,8 +115,10 @@ impl GitopsWorkflow {
             let output_absolute_path = Path::new(&repo_root_path).join(&output_relative_path);
 
             if file_type.is_dir() {
-                let mut subpaths = self.render(&entry_template_path, repo_root_path, &output_relative_path, values)?;
-                paths.append(&mut subpaths);
+                if !is_dotted_file_name {
+                    let mut subpaths = self.render(&entry_template_path, repo_root_path, &output_relative_path, values)?;
+                    paths.append(&mut subpaths);
+                }
             } else {
                 println!("adding path to list {:?}", output_relative_path);
                 paths.push(output_relative_path);
@@ -154,14 +155,13 @@ impl GitopsWorkflow {
 
         let workload_list: String = workloads.into_iter().map(|workload| {
             let display_string = workload.to_string_lossy();
-            format!("- {}\n", display_string)
+            format!("    - {}\n", display_string)
         }).collect();
         let kustomization =
     format!("apiVersion: kustomize.config.k8s.io/v1beta1
-    kind: Kustomization
-    resources:
-    {}
-    ", workload_list);
+kind: Kustomization
+resources:
+{}", workload_list);
 
         let kustomization_path = cluster_path.join("kustomization.yaml");
 
@@ -221,11 +221,14 @@ impl GitopsWorkflow {
     }
 
     pub fn create_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<Oid, Error> {
+        let deployment_temp_dir = tempdir()?;
+        let workload_gitops_temp_dir = tempdir()?;
+
         // clone app repo specified by workload.spec.templates.deployment.source
-        let workload_deployment_repo = self.clone_deployment_repo(workload)?;
+        let workload_deployment_repo = self.clone_deployment_repo(workload, &deployment_temp_dir)?;
 
         // clone workload cluster gitops repo specified by workload_repo_url
-        let workload_gitops_repo = self.clone_workload_gitops_repo()?;
+        let workload_gitops_repo = self.clone_workload_gitops_repo(&workload_gitops_temp_dir)?;
 
         let template_path = Path::new(workload_deployment_repo.path()).parent().unwrap()
                                         .join(&workload.spec.templates.cluster.path);
@@ -269,9 +272,10 @@ impl GitopsWorkflow {
 
     pub fn delete_deployment(&self, _workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
         println!("gitopsworkflow: delete_deployment");
+        let workload_gitops_temp_dir = tempdir()?;
 
         // clone workload cluster gitops repo specified by workload_repo_url
-        let workload_gitops_repo = self.clone_workload_gitops_repo()?;
+        let workload_gitops_repo = self.clone_workload_gitops_repo(&workload_gitops_temp_dir)?;
 
         // delete workload path in workload cluster gitops repo
         let output_path = Path::new(workload_gitops_repo.path())

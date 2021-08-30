@@ -113,8 +113,8 @@ async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<Con
             workload_assignment_controller.create_deployment(&workload_assignment.name(), &namespace).await?;
 
             Ok(ReconcilerAction {
-                // Finalizer is added, deployment is deployed, re-check in 10 seconds.
-                requeue_after: Some(Duration::from_secs(10)),
+                // Finalizer is added, deployment is deployed, re-check in 60 seconds.
+                requeue_after: Some(Duration::from_secs(60)),
             })
         }
         Action::Delete => {
@@ -141,9 +141,9 @@ async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<Con
             println!("Action::NoOp");
 
             Ok(ReconcilerAction {
-                // The resource is already in desired state, do nothing and re-check after 10 seconds
+                // The resource is already in desired state, do nothing and re-check after 60 seconds
 
-                requeue_after: Some(Duration::from_secs(10)),
+                requeue_after: Some(Duration::from_secs(60)),
             })
         },
     };
