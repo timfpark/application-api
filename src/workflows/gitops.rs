@@ -136,8 +136,10 @@ impl GitopsWorkflow {
             let entry = entry_result?;
             let file_type = entry.file_type()?;
 
-            if file_type.is_dir() {
-                workloads.push(entry.file_name());
+            let file_name = entry.file_name();
+
+            if file_type.is_dir() && !file_name.eq("flux-system") {
+                workloads.push(file_name);
             }
         }
 
