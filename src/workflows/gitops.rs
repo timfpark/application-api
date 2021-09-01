@@ -3,6 +3,7 @@ use git2::build::RepoBuilder;
 use handlebars::Handlebars;
 use std::collections::HashMap;
 use std::env;
+use std::ffi::OsString;
 use std::fs::{create_dir_all, remove_dir_all};
 use std::path::{Path, PathBuf};
 use tempfile::{TempDir, tempdir};
@@ -131,7 +132,8 @@ impl GitopsWorkflow {
         // read all directory names (aka workloads)
         let entries = std::fs::read_dir(cluster_path)?;
 
-        let mut workloads = Vec::new();
+        let mut workloads = vec![OsString::from("../common")];
+
         for entry_result in entries {
             let entry = entry_result?;
             let file_type = entry.file_type()?;
@@ -225,9 +227,8 @@ resources:
 
         let workload_gitops_repo_path = Path::new(workload_gitops_repo.path()).parent().unwrap();
 
-        // TODO: should be less opinionated / more configurable about where workloads go
-        let cluster_relative_path = Path::new("workloads")
-                                            .join(&workload_assignment.spec.cluster);
+        // TODO: should we be less opinionated / more configurable about where workloads go?
+        let cluster_relative_path = Path::new(&workload_assignment.spec.cluster);
         let cluster_path = workload_gitops_repo_path.join(&cluster_relative_path);
 
         let output_relative_path = cluster_relative_path.join(&workload_assignment.spec.workload);
@@ -268,24 +269,41 @@ resources:
         Ok(oid)
     }
 
-    pub fn delete_deployment(&self, _workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<(), Error> {
+    pub fn delete_deployment(&self, workload_assignment: &WorkloadAssignment) -> Result<Oid, Error> {
         println!("gitopsworkflow: delete_deployment");
         let workload_gitops_temp_dir = tempdir()?;
 
         // clone workload cluster gitops repo specified by workload_repo_url
         let workload_gitops_repo = self.clone_workload_gitops_repo(&workload_gitops_temp_dir)?;
+        let workload_gitops_repo_path = Path::new(workload_gitops_repo.path()).parent().unwrap();
 
-        // delete workload path in workload cluster gitops repo
-        let output_path = Path::new(workload_gitops_repo.path())
-                                       .join("workloads")
-                                       .join(&workload_assignment.spec.cluster)
-                                       .join(&workload_assignment.spec.workload);
+        let cluster_relative_path = Path::new(&workload_assignment.spec.cluster);
+        let cluster_path = workload_gitops_repo_path
+                                        .join(&cluster_relative_path);
 
-        remove_dir_all(&output_path)?;
+        let output_relative_path = cluster_relative_path
+                                        .join(&workload_assignment.spec.workload);
 
-        // add deleted files and make commit
+        let mut index = workload_gitops_repo.index()?;
 
-        Ok(())
+        index.remove_dir(&output_relative_path, 0)?;
+
+        self.link(&cluster_path)?;
+
+        let kustomization_path = cluster_relative_path.join("kustomization.yaml");
+        let paths : Vec<PathBuf> = vec![kustomization_path];
+
+        // TODO(ENH): Support different messages
+        let message = format!("Reconciling deleted WorkloadAssignment {} for Workload {} for Cluster {}", workload_assignment.metadata.name.as_ref().unwrap(), workload_assignment.spec.workload, workload_assignment.spec.cluster);
+
+        // add and commit output path in workload cluster gitops repo
+        let oid = self.commit_files(&workload_gitops_repo, &mut index, paths, &message)?;
+
+        // TODO: make more flexible to support different branches
+        self.push(&workload_gitops_repo, &self.workload_repo_url, "main")?;
+
+        Ok(oid)
+
     }
 }
 

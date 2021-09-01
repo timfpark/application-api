@@ -85,7 +85,7 @@ impl WorkloadAssignmentController {
         let workload_assignment = workload_assignment_api.get(name).await?;
         println!("{:?}", workload_assignment);
 
-        // self.workflow.delete_deployment(&workload_assignment)?;
+        self.workflow.delete_deployment(&workload_assignment)?;
 
         Ok(())
     }
