@@ -1,12 +1,14 @@
-use git2::{Cred, ObjectType, Direction, Index, Oid, PushOptions, RemoteCallbacks, Repository, Signature};
 use git2::build::RepoBuilder;
+use git2::{
+    Cred, Direction, Index, ObjectType, Oid, PushOptions, RemoteCallbacks, Repository, Signature,
+};
 use handlebars::Handlebars;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
-use std::fs::{create_dir_all, remove_dir_all};
+use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
-use tempfile::{TempDir, tempdir};
+use tempfile::{tempdir, TempDir};
 
 use crate::models::workload::Workload;
 use crate::models::workload_assignment::WorkloadAssignment;
@@ -20,13 +22,12 @@ impl GitopsWorkflow {
     pub fn new(workload_repo_url: &str) -> Result<GitopsWorkflow, Error> {
         return Ok(GitopsWorkflow {
             workload_repo_url: workload_repo_url.to_string(),
-        })
+        });
     }
 
     fn get_auth_callback(&self) -> RemoteCallbacks {
         // Prepare callbacks.
         let mut callbacks = RemoteCallbacks::new();
-
 
         // TODO: Migrate to secrets
         callbacks.credentials(|_url, username_from_url, _allowed_types| {
@@ -45,7 +46,6 @@ impl GitopsWorkflow {
     }
 
     fn get_repo_builder(&self) -> RepoBuilder {
-
         let auth_callback = self.get_auth_callback();
 
         // Prepare fetch options.
@@ -59,33 +59,42 @@ impl GitopsWorkflow {
         builder
     }
 
-    fn clone_deployment_repo(&self, workload: &Workload, deployment_temp_dir: &TempDir) -> Result<Repository, Error> {
+    fn clone_deployment_repo(
+        &self,
+        workload: &Workload,
+        deployment_temp_dir: &TempDir,
+    ) -> Result<Repository, Error> {
         let repo_path = deployment_temp_dir.path().join("template");
 
         let mut repo_builder = self.get_repo_builder();
 
         match repo_builder.clone(&workload.spec.templates.workload.source, &repo_path) {
-            Ok(repo) => { Ok(repo) },
-            Err(err) => { Err(Error::GitError { source: err } ) }
+            Ok(repo) => Ok(repo),
+            Err(err) => Err(Error::GitError { source: err }),
         }
     }
 
-    fn clone_workload_gitops_repo(&self, workload_gitops_temp_dir: &TempDir) -> Result<Repository, Error> {
+    fn clone_workload_gitops_repo(
+        &self,
+        workload_gitops_temp_dir: &TempDir,
+    ) -> Result<Repository, Error> {
         let repo_path = workload_gitops_temp_dir.path().join("gitops");
 
         let mut repo_builder = self.get_repo_builder();
 
         match repo_builder.clone(&self.workload_repo_url, &repo_path) {
-            Ok(repo) => {
-                Ok(repo)
-            },
-            Err(err) => {
-                Err(Error::GitError { source: err } )
-            }
+            Ok(repo) => Ok(repo),
+            Err(err) => Err(Error::GitError { source: err }),
         }
     }
 
-    fn render(&self, template_path: &Path, repo_root_path: &Path, root_relative_path: &Path, values: &HashMap<&str, &str>) -> Result<Vec<PathBuf>, Error> {
+    fn render(
+        &self,
+        template_path: &Path,
+        repo_root_path: &Path,
+        root_relative_path: &Path,
+        values: &HashMap<&str, &str>,
+    ) -> Result<Vec<PathBuf>, Error> {
         let mut paths = Vec::new();
 
         let output_path = repo_root_path.join(root_relative_path);
@@ -96,7 +105,8 @@ impl GitopsWorkflow {
         for entry_result in entries {
             let entry = entry_result?;
             let file_type = entry.file_type()?;
-            let is_dotted_file_name = entry.file_name().to_str().unwrap().chars().next().unwrap() == '.';
+            let is_dotted_file_name =
+                entry.file_name().to_str().unwrap().chars().next().unwrap() == '.';
 
             let entry_template_path = entry.path();
 
@@ -105,7 +115,12 @@ impl GitopsWorkflow {
 
             if file_type.is_dir() {
                 if !is_dotted_file_name {
-                    let mut subpaths = self.render(&entry_template_path, repo_root_path, &output_relative_path, values)?;
+                    let mut subpaths = self.render(
+                        &entry_template_path,
+                        repo_root_path,
+                        &output_relative_path,
+                        values,
+                    )?;
                     paths.append(&mut subpaths);
                 }
             } else {
@@ -114,11 +129,13 @@ impl GitopsWorkflow {
 
                 let template = std::fs::read_to_string(entry_template_path)?;
                 let mut handlebars = Handlebars::new();
-                handlebars.register_template_string("template", template).unwrap();
+                handlebars
+                    .register_template_string("template", template)
+                    .unwrap();
 
                 let rendered_file = match handlebars.render("template", values) {
                     Ok(rendered_file) => rendered_file,
-                    Err(err) => return Err(Error::RenderError { source: err } )
+                    Err(err) => return Err(Error::RenderError { source: err }),
                 };
 
                 std::fs::write(output_absolute_path, rendered_file.as_bytes())?;
@@ -145,15 +162,20 @@ impl GitopsWorkflow {
             }
         }
 
-        let workload_list: String = workloads.into_iter().map(|workload| {
-            let display_string = workload.to_string_lossy();
-            format!("    - {}\n", display_string)
-        }).collect();
-        let kustomization =
-    format!("apiVersion: kustomize.config.k8s.io/v1beta1
+        let workload_list: String = workloads
+            .into_iter()
+            .map(|workload| {
+                let display_string = workload.to_string_lossy();
+                format!("    - {}\n", display_string)
+            })
+            .collect();
+        let kustomization = format!(
+            "apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-{}", workload_list);
+{}",
+            workload_list
+        );
 
         let kustomization_path = cluster_path.join("kustomization.yaml");
 
@@ -162,8 +184,14 @@ resources:
         Ok(())
     }
 
-    fn commit_files(&self, repo: &Repository, index: &mut Index, paths: Vec<PathBuf>, message: &str) -> Result<Oid, Error> {
-       for path in paths.iter() {
+    fn commit_files(
+        &self,
+        repo: &Repository,
+        index: &mut Index,
+        paths: Vec<PathBuf>,
+        message: &str,
+    ) -> Result<Oid, Error> {
+        for path in paths.iter() {
             // println!("adding path to index {:?}", path);
             index.add_path(path)?;
         }
@@ -176,23 +204,28 @@ resources:
         let obj = repo.head()?.resolve()?.peel(ObjectType::Commit)?;
         let parent_commit = match obj.into_commit() {
             Ok(commit) => commit,
-            Err(_) => return Err(Error::GitError { source: git2::Error::from_str("Couldn't find commit") })
+            Err(_) => {
+                return Err(Error::GitError {
+                    source: git2::Error::from_str("Couldn't find commit"),
+                })
+            }
         };
 
         let tree = repo.find_tree(oid)?;
 
-        repo.commit(Some("HEAD"), //  point HEAD to our new commit
-                    &signature, // author
-                    &signature, // committer
-                    message, // commit message
-                    &tree, // tree
-                    &[&parent_commit])?; // parents
+        repo.commit(
+            Some("HEAD"), //  point HEAD to our new commit
+            &signature,   // author
+            &signature,   // committer
+            message,      // commit message
+            &tree,        // tree
+            &[&parent_commit],
+        )?; // parents
 
         Ok(oid)
     }
 
     fn push(&self, repo: &Repository, url: &str, branch: &str) -> Result<(), Error> {
-
         let mut remote = match repo.find_remote("origin") {
             Ok(r) => r,
             Err(_) => repo.remote("origin", url)?,
@@ -212,7 +245,11 @@ resources:
         Ok(())
     }
 
-    pub fn create_deployment(&self, workload: &Workload, workload_assignment: &WorkloadAssignment) -> Result<Oid, Error> {
+    pub fn create_deployment(
+        &self,
+        workload: &Workload,
+        workload_assignment: &WorkloadAssignment,
+    ) -> Result<Oid, Error> {
         let deployment_temp_dir = tempdir()?;
         let workload_gitops_temp_dir = tempdir()?;
 
@@ -222,8 +259,10 @@ resources:
         // clone workload cluster gitops repo specified by workload_repo_url
         let workload_gitops_repo = self.clone_workload_gitops_repo(&workload_gitops_temp_dir)?;
 
-        let template_path = Path::new(workload_template_repo.path()).parent().unwrap()
-                                        .join(&workload.spec.templates.workload.path);
+        let template_path = Path::new(workload_template_repo.path())
+            .parent()
+            .unwrap()
+            .join(&workload.spec.templates.workload.path);
 
         let workload_gitops_repo_path = Path::new(workload_gitops_repo.path()).parent().unwrap();
 
@@ -251,14 +290,24 @@ resources:
             }
         }
 
-        let mut paths = self.render(&template_path, workload_gitops_repo_path, &output_relative_path, &template_values)?;
+        let mut paths = self.render(
+            &template_path,
+            workload_gitops_repo_path,
+            &output_relative_path,
+            &template_values,
+        )?;
         self.link(&cluster_path)?;
 
         let kustomization_path = cluster_relative_path.join("kustomization.yaml");
         paths.push(kustomization_path);
 
         // TODO(ENH): Support different messages
-        let message = format!("Reconciling created WorkloadAssignment {} for Workload {} for Cluster {}", workload_assignment.metadata.name.as_ref().unwrap(), workload_assignment.spec.workload, workload_assignment.spec.cluster);
+        let message = format!(
+            "Reconciling created WorkloadAssignment {} for Workload {} for Cluster {}",
+            workload_assignment.metadata.name.as_ref().unwrap(),
+            workload_assignment.spec.workload,
+            workload_assignment.spec.cluster
+        );
 
         // add and commit output path in workload cluster gitops repo
         let oid = self.commit_files(&workload_gitops_repo, &mut index, paths, &message)?;
@@ -269,7 +318,10 @@ resources:
         Ok(oid)
     }
 
-    pub fn delete_deployment(&self, workload_assignment: &WorkloadAssignment) -> Result<Oid, Error> {
+    pub fn delete_deployment(
+        &self,
+        workload_assignment: &WorkloadAssignment,
+    ) -> Result<Oid, Error> {
         println!("gitopsworkflow: delete_deployment");
         let workload_gitops_temp_dir = tempdir()?;
 
@@ -278,11 +330,9 @@ resources:
         let workload_gitops_repo_path = Path::new(workload_gitops_repo.path()).parent().unwrap();
 
         let cluster_relative_path = Path::new(&workload_assignment.spec.cluster);
-        let cluster_path = workload_gitops_repo_path
-                                        .join(&cluster_relative_path);
+        let cluster_path = workload_gitops_repo_path.join(&cluster_relative_path);
 
-        let output_relative_path = cluster_relative_path
-                                        .join(&workload_assignment.spec.workload);
+        let output_relative_path = cluster_relative_path.join(&workload_assignment.spec.workload);
 
         let mut index = workload_gitops_repo.index()?;
 
@@ -291,10 +341,15 @@ resources:
         self.link(&cluster_path)?;
 
         let kustomization_path = cluster_relative_path.join("kustomization.yaml");
-        let paths : Vec<PathBuf> = vec![kustomization_path];
+        let paths: Vec<PathBuf> = vec![kustomization_path];
 
         // TODO(ENH): Support different messages
-        let message = format!("Reconciling deleted WorkloadAssignment {} for Workload {} for Cluster {}", workload_assignment.metadata.name.as_ref().unwrap(), workload_assignment.spec.workload, workload_assignment.spec.cluster);
+        let message = format!(
+            "Reconciling deleted WorkloadAssignment {} for Workload {} for Cluster {}",
+            workload_assignment.metadata.name.as_ref().unwrap(),
+            workload_assignment.spec.workload,
+            workload_assignment.spec.cluster
+        );
 
         // add and commit output path in workload cluster gitops repo
         let oid = self.commit_files(&workload_gitops_repo, &mut index, paths, &message)?;
@@ -303,7 +358,6 @@ resources:
         self.push(&workload_gitops_repo, &self.workload_repo_url, "main")?;
 
         Ok(oid)
-
     }
 }
 
@@ -313,8 +367,8 @@ mod tests {
     use std::collections::HashMap;
     use std::path::Path;
 
-    use crate::models::templates_spec::TemplatesSpec;
     use crate::models::template_spec::TemplateSpec;
+    use crate::models::templates_spec::TemplatesSpec;
     use crate::models::workload::{Workload, WorkloadSpec};
     use crate::models::workload_assignment::{WorkloadAssignment, WorkloadAssignmentSpec};
 
@@ -322,7 +376,8 @@ mod tests {
 
     #[test]
     fn can_create_deployment() {
-        let workflow = GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
+        let workflow =
+            GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
 
         let mut values: HashMap<String, String> = HashMap::new();
         values.insert("ring".to_string(), "main".to_string());
@@ -340,13 +395,13 @@ mod tests {
                     workload: TemplateSpec {
                         method: Some("git".to_string()),
                         source: "git@github.com:timfpark/cluster-agent".to_string(),
-                        path: "templates/deployment".to_string()
+                        path: "templates/deployment".to_string(),
                     },
 
-                    global: None
+                    global: None,
                 },
-                values: Some(values)
-            }
+                values: Some(values),
+            },
         };
 
         let workload_assignment = WorkloadAssignment {
@@ -359,8 +414,8 @@ mod tests {
             },
             spec: WorkloadAssignmentSpec {
                 cluster: "azure-eastus2-1".to_string(),
-                workload: "cluster-agent".to_string()
-            }
+                workload: "cluster-agent".to_string(),
+            },
         };
 
         match workflow.create_deployment(&workload, &workload_assignment) {
@@ -374,7 +429,8 @@ mod tests {
 
     #[test]
     fn can_render_workload() {
-        let workflow = GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
+        let workflow =
+            GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
 
         let mut values: HashMap<&str, &str> = HashMap::new();
         values.insert("CLUSTER_NAME", "my-cluster");
@@ -386,7 +442,9 @@ mod tests {
 
         std::fs::create_dir_all(output_path).unwrap();
 
-        let paths = workflow.render(template_path, repo_root_path, root_relative_path, &values).unwrap();
+        let paths = workflow
+            .render(template_path, repo_root_path, root_relative_path, &values)
+            .unwrap();
 
         assert_eq!(paths.len(), 2);
     }

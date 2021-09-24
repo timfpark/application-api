@@ -4,5 +4,5 @@ use serde::{Deserialize, Serialize};
 pub struct TemplateSpec {
     pub method: Option<String>,
     pub source: String,
-    pub path: String
+    pub path: String,
 }

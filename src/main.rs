@@ -9,8 +9,8 @@ use tokio::time::Duration;
 
 mod controllers;
 mod models;
-mod workflows;
 mod utils;
+mod workflows;
 
 use models::workload_assignment::WorkloadAssignment;
 use utils::error::Error;
@@ -39,7 +39,10 @@ async fn main() {
             println!("{:?}", reconciliation_result);
             match reconciliation_result {
                 Ok(workload_assignment_resource) => {
-                    println!("Reconciliation successful. Resource: {:?}", workload_assignment_resource);
+                    println!(
+                        "Reconciliation successful. Resource: {:?}",
+                        workload_assignment_resource
+                    );
                 }
                 Err(reconciliation_err) => {
                     eprintln!("Reconciliation error: {:?}", reconciliation_err)
@@ -51,7 +54,7 @@ async fn main() {
 
 /// Context injected with each `reconcile` and `on_error` method invocation.
 struct ContextData {
-    controller: WorkloadAssignmentController
+    controller: WorkloadAssignmentController,
 }
 
 impl ContextData {
@@ -76,7 +79,10 @@ enum Action {
     NoOp,
 }
 
-async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<ContextData>) -> Result<ReconcilerAction, Error> {
+async fn reconcile(
+    workload_assignment: WorkloadAssignment,
+    context: Context<ContextData>,
+) -> Result<ReconcilerAction, Error> {
     let workload_assignment_controller = &context.get_ref().controller; // The `Client` is shared -> a clone from the reference is obtained
 
     // The resource of `WorkloadAssignment` kind is required to have a namespace set. However, it is not guaranteed
@@ -107,10 +113,14 @@ async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<Con
 
             // Apply the finalizer first. If that fails, the `?` operator invokes automatic conversion
             // of `kube::Error` to the `Error` defined in this crate.
-            workload_assignment_controller.add_finalizer_record(&name, &namespace).await?;
+            workload_assignment_controller
+                .add_finalizer_record(&name, &namespace)
+                .await?;
 
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` WorkloadAssignment service pods.
-            workload_assignment_controller.create_deployment(&workload_assignment.name(), &namespace).await?;
+            workload_assignment_controller
+                .create_deployment(&workload_assignment.name(), &namespace)
+                .await?;
 
             Ok(ReconcilerAction {
                 // Finalizer is added, deployment is deployed, re-check in 60 seconds.
@@ -127,11 +137,15 @@ async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<Con
             // with that error.
 
             // Note: A more advanced implementation would check for the Deployment's existence.
-            workload_assignment_controller.delete_deployment(&workload_assignment.name(), &namespace).await?;
+            workload_assignment_controller
+                .delete_deployment(&workload_assignment.name(), &namespace)
+                .await?;
 
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `WorkloadAssignment` resource.
-            workload_assignment_controller.delete_finalizer_record(&workload_assignment.name(), &namespace).await?;
+            workload_assignment_controller
+                .delete_finalizer_record(&workload_assignment.name(), &namespace)
+                .await?;
 
             Ok(ReconcilerAction {
                 requeue_after: None, // Makes no sense to delete after a successful delete, as the resource is gone
@@ -142,10 +156,9 @@ async fn reconcile(workload_assignment: WorkloadAssignment, context: Context<Con
 
             Ok(ReconcilerAction {
                 // The resource is already in desired state, do nothing and re-check after 60 seconds
-
                 requeue_after: Some(Duration::from_secs(60)),
             })
-        },
+        }
     };
 }
 

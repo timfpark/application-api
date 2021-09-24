@@ -16,5 +16,5 @@ use serde::{Deserialize, Serialize};
 )]
 pub struct WorkloadAssignmentSpec {
     pub workload: String,
-    pub cluster: String
+    pub cluster: String,
 }

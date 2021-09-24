@@ -9,15 +9,19 @@ use crate::workflows::gitops::GitopsWorkflow;
 
 pub struct WorkloadAssignmentController {
     client: Client,
-    workflow: GitopsWorkflow
+    workflow: GitopsWorkflow,
 }
 
 impl WorkloadAssignmentController {
     pub fn new(client: Client) -> Self {
         // TODO: need mechanism to configure downstream workload cluster gitops repo
-        let workflow = GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
+        let workflow =
+            GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
 
-        WorkloadAssignmentController { client: client.clone(), workflow }
+        WorkloadAssignmentController {
+            client: client.clone(),
+            workflow,
+        }
     }
 
     /// Adds a finalizer record into an `WorkloadAssignment` kind of resource. If the finalizer already exists,
@@ -29,7 +33,11 @@ impl WorkloadAssignmentController {
     /// - `namespace` - Namespace where the `WorkloadAssignment` resource with given `name` resides.
     ///
     /// Note: Does not check for resource's existence for simplicity.
-    pub async fn add_finalizer_record(&self, name: &str, namespace: &str) -> Result<WorkloadAssignment, Error> {
+    pub async fn add_finalizer_record(
+        &self,
+        name: &str,
+        namespace: &str,
+    ) -> Result<WorkloadAssignment, Error> {
         println!("Workload add_finalizer_record");
 
         let api: Api<WorkloadAssignment> = Api::namespaced(self.client.clone(), namespace);
@@ -56,7 +64,8 @@ impl WorkloadAssignmentController {
         println!("Workload create_deployment");
 
         let workload_api: Api<Workload> = Api::namespaced(self.client.clone(), namespace);
-        let workload_assignment_api: Api<WorkloadAssignment> = Api::namespaced(self.client.clone(), namespace);
+        let workload_assignment_api: Api<WorkloadAssignment> =
+            Api::namespaced(self.client.clone(), namespace);
 
         let workload_assignment = workload_assignment_api.get(name).await?;
         println!("{:?}", workload_assignment);
@@ -64,7 +73,8 @@ impl WorkloadAssignmentController {
         let workload = workload_api.get(&workload_assignment.spec.workload).await?;
         println!("{:?}", workload);
 
-        self.workflow.create_deployment(&workload, &workload_assignment)?;
+        self.workflow
+            .create_deployment(&workload, &workload_assignment)?;
 
         Ok(())
     }
@@ -80,7 +90,8 @@ impl WorkloadAssignmentController {
     pub async fn delete_deployment(&self, name: &str, namespace: &str) -> Result<(), Error> {
         println!("Workload delete_deployment");
 
-        let workload_assignment_api: Api<WorkloadAssignment> = Api::namespaced(self.client.clone(), namespace);
+        let workload_assignment_api: Api<WorkloadAssignment> =
+            Api::namespaced(self.client.clone(), namespace);
 
         let workload_assignment = workload_assignment_api.get(name).await?;
         println!("{:?}", workload_assignment);
@@ -99,7 +110,11 @@ impl WorkloadAssignmentController {
     /// - `namespace` - Namespace where the `WorkloadAssignment` resource with given `name` resides.
     ///
     /// Note: Does not check for resource's existence for simplicity.
-    pub async fn delete_finalizer_record(&self, name: &str, namespace: &str) -> Result<WorkloadAssignment, Error> {
+    pub async fn delete_finalizer_record(
+        &self,
+        name: &str,
+        namespace: &str,
+    ) -> Result<WorkloadAssignment, Error> {
         println!("Workload delete_finalizer_record");
 
         let api: Api<WorkloadAssignment> = Api::namespaced(self.client.clone(), namespace);
@@ -113,10 +128,3 @@ impl WorkloadAssignmentController {
         Ok(api.patch(name, &PatchParams::default(), &patch).await?)
     }
 }
-
-
-
-
-
-
-

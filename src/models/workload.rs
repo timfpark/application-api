@@ -20,5 +20,5 @@ use super::templates_spec::TemplatesSpec;
 )]
 pub struct WorkloadSpec {
     pub templates: TemplatesSpec,
-    pub values: Option<HashMap<String, String>>
+    pub values: Option<HashMap<String, String>>,
 }

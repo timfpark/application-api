@@ -27,6 +27,6 @@ pub enum Error {
     #[error("Render error: {source}")]
     RenderError {
         #[from]
-        source: handlebars::RenderError
-    }
+        source: handlebars::RenderError,
+    },
 }
