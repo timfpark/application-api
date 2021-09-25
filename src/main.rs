@@ -171,7 +171,7 @@ async fn reconcile(
 fn determine_action(application_assignment: &ApplicationAssignment) -> Action {
     return if application_assignment.meta().deletion_timestamp.is_some() {
         Action::Delete
-    } else if application_assignment.meta().finalizers.is_empty() {
+    } else if application_assignment.meta().finalizers.is_some() {
         Action::Create
     } else {
         Action::NoOp
