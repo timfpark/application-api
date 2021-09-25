@@ -1,14 +1,14 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-    name: workloadassignments.example.com
+    name: applicationassignments.example.com
     namespace: default # For easier deployment and avoid permissions collisions on most clusters, the resource is namespace-scoped. More information at: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/
 spec:
     group: example.com
     names:
-        kind: WorkloadAssignment
-        plural: workloadassignments
-        singular: workloadassignment
+        kind: ApplicationAssignment
+        plural: applicationassignments
+        singular: applicationassignment
         shortNames:
             - wa
     scope: Namespaced
@@ -25,6 +25,6 @@ spec:
                           properties:
                               cluster:
                                   type: string
-                              workload:
+                              application:
                                   type: string
-                          required: ["cluster", "workload"]
+                          required: ["cluster", "application"]

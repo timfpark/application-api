@@ -1,5 +1,5 @@
 [package]
-name = "workload-api"
+name = "application-api"
 version = "0.1.0"
 authors = ["Tim Park <timfpark@gmail.com>"]
 edition = "2018"

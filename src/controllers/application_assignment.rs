@@ -2,48 +2,48 @@ use kube::api::{Patch, PatchParams};
 use kube::{Api, Client};
 use serde_json::{json, Value};
 
-use crate::models::workload::Workload;
-use crate::models::workload_assignment::WorkloadAssignment;
+use crate::models::application::Application;
+use crate::models::application_assignment::ApplicationAssignment;
 use crate::utils::error::Error;
 use crate::workflows::gitops::GitopsWorkflow;
 
-pub struct WorkloadAssignmentController {
+pub struct ApplicationAssignmentController {
     client: Client,
     workflow: GitopsWorkflow,
 }
 
-impl WorkloadAssignmentController {
+impl ApplicationAssignmentController {
     pub fn new(client: Client) -> Self {
-        // TODO: need mechanism to configure downstream workload cluster gitops repo
+        // TODO: need mechanism to configure downstream cluster gitops repo
         let workflow =
             GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
 
-        WorkloadAssignmentController {
+        ApplicationAssignmentController {
             client: client.clone(),
             workflow,
         }
     }
 
-    /// Adds a finalizer record into an `WorkloadAssignment` kind of resource. If the finalizer already exists,
+    /// Adds a finalizer record into an `ApplicationAssignment` kind of resource. If the finalizer already exists,
     /// this action has no effect.
     ///
     /// # Arguments:
-    /// - `client` - Kubernetes client to modify the `WorkloadAssignment` resource with.
-    /// - `name` - Name of the `WorkloadAssignment` resource to modify. Existence is not verified
-    /// - `namespace` - Namespace where the `WorkloadAssignment` resource with given `name` resides.
+    /// - `client` - Kubernetes client to modify the `ApplicationAssignment` resource with.
+    /// - `name` - Name of the `ApplicationAssignment` resource to modify. Existence is not verified
+    /// - `namespace` - Namespace where the `ApplicationAssignment` resource with given `name` resides.
     ///
     /// Note: Does not check for resource's existence for simplicity.
     pub async fn add_finalizer_record(
         &self,
         name: &str,
         namespace: &str,
-    ) -> Result<WorkloadAssignment, Error> {
-        println!("Workload add_finalizer_record");
+    ) -> Result<ApplicationAssignment, Error> {
+        println!("Application add_finalizer_record");
 
-        let api: Api<WorkloadAssignment> = Api::namespaced(self.client.clone(), namespace);
+        let api: Api<ApplicationAssignment> = Api::namespaced(self.client.clone(), namespace);
         let finalizer: Value = json!({
             "metadata": {
-                "finalizers": ["workload-assignments.example.com"]
+                "finalizers": ["application-assignments.example.com"]
             }
         });
 
@@ -51,7 +51,7 @@ impl WorkloadAssignmentController {
         Ok(api.patch(name, &PatchParams::default(), &patch).await?)
     }
 
-    /// Deploy the Workload on the Cluster specified by the WorkloadAssignment.
+    /// Deploy the Application on the Cluster specified by the ApplicationAssignment.
     ///
     /// # Arguments
     /// - `client` - A Kubernetes client to create the deployment with.
@@ -61,20 +61,22 @@ impl WorkloadAssignmentController {
     ///
     /// Note: It is assumed the resource does not already exists for simplicity. Returns an `Error` if it does.
     pub async fn create_deployment(&self, name: &str, namespace: &str) -> Result<(), Error> {
-        println!("Workload create_deployment");
+        println!("Application create_deployment");
 
-        let workload_api: Api<Workload> = Api::namespaced(self.client.clone(), namespace);
-        let workload_assignment_api: Api<WorkloadAssignment> =
+        let application_api: Api<Application> = Api::namespaced(self.client.clone(), namespace);
+        let application_assignment_api: Api<ApplicationAssignment> =
             Api::namespaced(self.client.clone(), namespace);
 
-        let workload_assignment = workload_assignment_api.get(name).await?;
-        println!("{:?}", workload_assignment);
+        let application_assignment = application_assignment_api.get(name).await?;
+        println!("{:?}", application_assignment);
 
-        let workload = workload_api.get(&workload_assignment.spec.workload).await?;
-        println!("{:?}", workload);
+        let application = application_api
+            .get(&application_assignment.spec.application)
+            .await?;
+        println!("{:?}", application);
 
         self.workflow
-            .create_deployment(&workload, &workload_assignment)?;
+            .create_deployment(&application, &application_assignment)?;
 
         Ok(())
     }
@@ -88,36 +90,36 @@ impl WorkloadAssignmentController {
     ///
     /// Note: It is assumed the deployment exists for simplicity. Otherwise returns an Error.
     pub async fn delete_deployment(&self, name: &str, namespace: &str) -> Result<(), Error> {
-        println!("Workload delete_deployment");
+        println!("Application delete_deployment");
 
-        let workload_assignment_api: Api<WorkloadAssignment> =
+        let application_assignment_api: Api<ApplicationAssignment> =
             Api::namespaced(self.client.clone(), namespace);
 
-        let workload_assignment = workload_assignment_api.get(name).await?;
-        println!("{:?}", workload_assignment);
+        let application_assignment = application_assignment_api.get(name).await?;
+        println!("{:?}", application_assignment);
 
-        self.workflow.delete_deployment(&workload_assignment)?;
+        self.workflow.delete_deployment(&application_assignment)?;
 
         Ok(())
     }
 
-    /// Removes all finalizers from an `WorkloadAssignment` resource. If there are no finalizers already, this
+    /// Removes all finalizers from an `ApplicationAssignment` resource. If there are no finalizers already, this
     /// action has no effect.
     ///
     /// # Arguments:
-    /// - `client` - Kubernetes client to modify the `WorkloadAssignment` resource with.
-    /// - `name` - Name of the `WorkloadAssignment` resource to modify. Existence is not verified
-    /// - `namespace` - Namespace where the `WorkloadAssignment` resource with given `name` resides.
+    /// - `client` - Kubernetes client to modify the `ApplicationAssignment` resource with.
+    /// - `name` - Name of the `ApplicationAssignment` resource to modify. Existence is not verified
+    /// - `namespace` - Namespace where the `ApplicationAssignment` resource with given `name` resides.
     ///
     /// Note: Does not check for resource's existence for simplicity.
     pub async fn delete_finalizer_record(
         &self,
         name: &str,
         namespace: &str,
-    ) -> Result<WorkloadAssignment, Error> {
-        println!("Workload delete_finalizer_record");
+    ) -> Result<ApplicationAssignment, Error> {
+        println!("Application delete_finalizer_record");
 
-        let api: Api<WorkloadAssignment> = Api::namespaced(self.client.clone(), namespace);
+        let api: Api<ApplicationAssignment> = Api::namespaced(self.client.clone(), namespace);
         let finalizer: Value = json!({
             "metadata": {
                 "finalizers": null

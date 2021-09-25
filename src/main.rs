@@ -1,4 +1,4 @@
-use controllers::workload_assignment::WorkloadAssignmentController;
+use controllers::application_assignment::ApplicationAssignmentController;
 use futures::stream::StreamExt;
 use kube::Resource;
 use kube::ResourceExt;
@@ -12,7 +12,7 @@ mod models;
 mod utils;
 mod workflows;
 
-use models::workload_assignment::WorkloadAssignment;
+use models::application_assignment::ApplicationAssignment;
 use utils::error::Error;
 
 #[tokio::main]
@@ -24,24 +24,24 @@ async fn main() {
         .expect("Expected a valid KUBECONFIG environment variable.");
 
     // Preparation of resources used by the `kube_runtime::Controller`
-    let crd_api: Api<WorkloadAssignment> = Api::all(kubernetes_client.clone());
+    let crd_api: Api<ApplicationAssignment> = Api::all(kubernetes_client.clone());
     let context: Context<ContextData> = Context::new(ContextData::new(kubernetes_client.clone()));
 
     // The controller comes from the `kube_runtime` crate and manages the reconciliation process.
     // It requires the following information:
-    // - `kube::Api<T>` this controller "owns". In this case, `T = WorkloadAssignment`, as this controller owns the `WorkloadAssignment` resource,
-    // - `kube::api::ListParams` to select the `WorkloadAssignment` resources with. Can be used for WorkloadAssignment filtering `WorkloadAssignment` resources before reconciliation,
-    // - `reconcile` function with reconciliation logic to be called each time a resource of `WorkloadAssignment` kind is created/updated/deleted,
+    // - `kube::Api<T>` this controller "owns". In this case, `T = ApplicationAssignment`, as this controller owns the `ApplicationAssignment` resource,
+    // - `kube::api::ListParams` to select the `ApplicationAssignment` resources with. Can be used for ApplicationAssignment filtering `ApplicationAssignment` resources before reconciliation,
+    // - `reconcile` function with reconciliation logic to be called each time a resource of `ApplicationAssignment` kind is created/updated/deleted,
     // - `on_error` function to call whenever reconciliation fails.
     Controller::new(crd_api.clone(), ListParams::default())
         .run(reconcile, on_error, context)
         .for_each(|reconciliation_result| async move {
             println!("{:?}", reconciliation_result);
             match reconciliation_result {
-                Ok(workload_assignment_resource) => {
+                Ok(application_assignment_resource) => {
                     println!(
                         "Reconciliation successful. Resource: {:?}",
-                        workload_assignment_resource
+                        application_assignment_resource
                     );
                 }
                 Err(reconciliation_err) => {
@@ -54,7 +54,7 @@ async fn main() {
 
 /// Context injected with each `reconcile` and `on_error` method invocation.
 struct ContextData {
-    controller: WorkloadAssignmentController,
+    controller: ApplicationAssignmentController,
 }
 
 impl ContextData {
@@ -64,35 +64,35 @@ impl ContextData {
     /// - `client`: A Kubernetes client to make Kubernetes REST API requests with. Resources
     /// will be created and deleted with this client.
     pub fn new(client: Client) -> Self {
-        let controller = WorkloadAssignmentController::new(client);
+        let controller = ApplicationAssignmentController::new(client);
         ContextData { controller }
     }
 }
 
-/// Action to be taken upon an `WorkloadAssignment` resource during reconciliation
+/// Action to be taken upon an `ApplicationAssignment` resource during reconciliation
 enum Action {
-    /// Create the subresources, this includes spawning `n` pods with WorkloadAssignment service
+    /// Create the subresources, this includes spawning `n` pods with ApplicationAssignment service
     Create,
     /// Delete all subresources created in the `Create` phase
     Delete,
-    /// This `WorkloadAssignment` resource is in desired state and requires no actions to be taken
+    /// This `ApplicationAssignment` resource is in desired state and requires no actions to be taken
     NoOp,
 }
 
 async fn reconcile(
-    workload_assignment: WorkloadAssignment,
+    application_assignment: ApplicationAssignment,
     context: Context<ContextData>,
 ) -> Result<ReconcilerAction, Error> {
-    let workload_assignment_controller = &context.get_ref().controller; // The `Client` is shared -> a clone from the reference is obtained
+    let application_assignment_controller = &context.get_ref().controller; // The `Client` is shared -> a clone from the reference is obtained
 
-    // The resource of `WorkloadAssignment` kind is required to have a namespace set. However, it is not guaranteed
+    // The resource of `ApplicationAssignment` kind is required to have a namespace set. However, it is not guaranteed
     // the resource will have a `namespace` set. Therefore, the `namespace` field on object's metadata
     // is optional and Rust forces the programmer to check for it's existence first.
-    let namespace: String = match workload_assignment.namespace() {
+    let namespace: String = match application_assignment.namespace() {
         None => {
             // If there is no namespace to deploy to defined, reconciliation ends with an error immediately.
             return Err(Error::UserInputError(
-                "Expected WorkloadAssignment resource to be namespaced. Can't deploy to an unknown namespace."
+                "Expected ApplicationAssignment resource to be namespaced. Can't deploy to an unknown namespace."
                     .to_owned(),
             ));
         }
@@ -102,24 +102,24 @@ async fn reconcile(
     };
 
     // Performs action as decided by the `determine_action` function.
-    return match determine_action(&workload_assignment) {
+    return match determine_action(&application_assignment) {
         Action::Create => {
             println!("Action::Create");
-            // Creates a deployment with `n` WorkloadAssignment service pods, but applies a finalizer first.
+            // Creates a deployment with `n` ApplicationAssignment service pods, but applies a finalizer first.
             // Finalizer is applied first, as the operator might be shut down and restarted
             // at any time, leaving subresources in intermediate state. This prevents leaks on
-            // the `WorkloadAssignment` resource deletion.
-            let name = workload_assignment.name(); // Name of the WorkloadAssignment resource is used to name the subresources as well.
+            // the `ApplicationAssignment` resource deletion.
+            let name = application_assignment.name(); // Name of the ApplicationAssignment resource is used to name the subresources as well.
 
             // Apply the finalizer first. If that fails, the `?` operator invokes automatic conversion
             // of `kube::Error` to the `Error` defined in this crate.
-            workload_assignment_controller
+            application_assignment_controller
                 .add_finalizer_record(&name, &namespace)
                 .await?;
 
-            // Invoke creation of a Kubernetes built-in resource named deployment with `n` WorkloadAssignment service pods.
-            workload_assignment_controller
-                .create_deployment(&workload_assignment.name(), &namespace)
+            // Invoke creation of a Kubernetes built-in resource named deployment with `n` ApplicationAssignment service pods.
+            application_assignment_controller
+                .create_deployment(&application_assignment.name(), &namespace)
                 .await?;
 
             Ok(ReconcilerAction {
@@ -129,22 +129,22 @@ async fn reconcile(
         }
         Action::Delete => {
             println!("Action::Delete");
-            // Deletes any subresources related to this `WorkloadAssignment` resources. If and only if all subresources
-            // are deleted, the finalizer is removed and Kubernetes is free to remove the `WorkloadAssignment` resource.
+            // Deletes any subresources related to this `ApplicationAssignment` resources. If and only if all subresources
+            // are deleted, the finalizer is removed and Kubernetes is free to remove the `ApplicationAssignment` resource.
 
             // First, delete the deployment. If there is any error deleting the deployment, it is
             // automatically converted into `Error` defined in this crate and the reconciliation is ended
             // with that error.
 
             // Note: A more advanced implementation would check for the Deployment's existence.
-            workload_assignment_controller
-                .delete_deployment(&workload_assignment.name(), &namespace)
+            application_assignment_controller
+                .delete_deployment(&application_assignment.name(), &namespace)
                 .await?;
 
             // Once the deployment is successfully removed, remove the finalizer to make it possible
-            // for Kubernetes to delete the `WorkloadAssignment` resource.
-            workload_assignment_controller
-                .delete_finalizer_record(&workload_assignment.name(), &namespace)
+            // for Kubernetes to delete the `ApplicationAssignment` resource.
+            application_assignment_controller
+                .delete_finalizer_record(&application_assignment.name(), &namespace)
                 .await?;
 
             Ok(ReconcilerAction {
@@ -163,15 +163,15 @@ async fn reconcile(
 }
 
 /// Resources arrives into reconciliation queue in a certain state. This function looks at
-/// the state of given `WorkloadAssignment` resource and decides which actions needs to be performed.
+/// the state of given `ApplicationAssignment` resource and decides which actions needs to be performed.
 /// The finite set of possible actions is represented by the `Action` enum.
 ///
 /// # Arguments
-/// - `workload_assignment`: A reference to `WorkloadAssignment` being reconciled to decide next action upon.
-fn determine_action(workload_assignment: &WorkloadAssignment) -> Action {
-    return if workload_assignment.meta().deletion_timestamp.is_some() {
+/// - `application_assignment`: A reference to `ApplicationAssignment` being reconciled to decide next action upon.
+fn determine_action(application_assignment: &ApplicationAssignment) -> Action {
+    return if application_assignment.meta().deletion_timestamp.is_some() {
         Action::Delete
-    } else if workload_assignment.meta().finalizers.is_empty() {
+    } else if application_assignment.meta().finalizers.is_empty() {
         Action::Create
     } else {
         Action::NoOp

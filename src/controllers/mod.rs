@@ -1,1 +1,1 @@
-pub mod workload_assignment;
+pub mod application_assignment;

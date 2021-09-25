@@ -1,5 +1,5 @@
-apiVersion: example.com/v1
-kind: Workload
+apiVersion: example.com/v1alpha1
+kind: Application
 metadata:
     name: cluster-agent-main
     namespace: default
@@ -9,15 +9,15 @@ spec:
     #          matching:
     #              - label: cloud
     #                value: azure
-    reconciler: gitops # mechanism used to reconciling workloads (currently only gitops supported)
+    reconciler: gitops # mechanism used to reconciling applications (currently only gitops supported)
     templates:
-        workload: # this template will be deployed per workload cluster assigned.
+        application: # this template will be deployed per application cluster assigned.
             method: git
             source: "git@github.com:timfpark/cluster-agent" # reconciler specific identifier for a source
             path: "templates/deployment" # reconciler specific path within that source
 
-    #   global: # this template will be deployed once for the whole workload on control plane
-    #       source: "https://github.com/timfpark/test-workload/global"
+    #   global: # this template will be deployed once for the whole application on control plane
+    #       source: "https://github.com/timfpark/test-application/global"
     #       path: "templates/deployment" # reconciler specific path within that source
 
     values: # values used during templating

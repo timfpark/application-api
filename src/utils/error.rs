@@ -8,8 +8,8 @@ pub enum Error {
         source: kube::Error,
     },
 
-    /// Error in user input or WorkloadAssignment resource definition, typically missing fields.
-    #[error("Invalid WorkloadAssignment CRD: {0}")]
+    /// Error in user input or ApplicationAssignment resource definition, typically missing fields.
+    #[error("Invalid ApplicationAssignment CRD: {0}")]
     UserInputError(String),
 
     #[error("Git error: {source}")]

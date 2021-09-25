@@ -10,7 +10,7 @@ spec:
             chart: external-service
             sourceRef:
                 kind: HelmRepository
-                name: workload-charts
+                name: application-charts
                 namespace: flux-system
             version: "1.0.7"
     interval: 1h0m0s
