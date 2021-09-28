@@ -1,1 +1,1 @@
-pub mod application_assignment;
+pub mod assignment;

@@ -3,7 +3,7 @@ use kube::{Api, Client};
 use serde_json::{json, Value};
 
 use crate::models::application::Application;
-use crate::models::application_assignment::ApplicationAssignment;
+use crate::models::assignment::ApplicationAssignment;
 use crate::utils::error::Error;
 use crate::workflows::gitops::GitopsWorkflow;
 
@@ -43,7 +43,7 @@ impl ApplicationAssignmentController {
         let api: Api<ApplicationAssignment> = Api::namespaced(self.client.clone(), namespace);
         let finalizer: Value = json!({
             "metadata": {
-                "finalizers": ["application-assignments.example.com"]
+                "finalizers": ["application-assignment.microsoft.com"]
             }
         });
 

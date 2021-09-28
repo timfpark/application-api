@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use tempfile::{tempdir, TempDir};
 
 use crate::models::application::Application;
-use crate::models::application_assignment::ApplicationAssignment;
+use crate::models::assignment::ApplicationAssignment;
 use crate::utils::error::Error;
 
 pub struct GitopsWorkflow {
@@ -199,7 +199,7 @@ resources:
         let oid = index.write_tree()?;
 
         // TODO: Add mechanism to provide identity of commits.
-        let signature = Signature::now("Application API", "application-api@example.com")?;
+        let signature = Signature::now("Application API", "application-api@microsoft.com")?;
 
         let obj = repo.head()?.resolve()?.peel(ObjectType::Commit)?;
         let parent_commit = match obj.into_commit() {
@@ -375,9 +375,9 @@ mod tests {
     use std::path::Path;
 
     use crate::models::application::{Application, ApplicationSpec};
-    use crate::models::application_assignment::{ApplicationAssignment, ApplicationAssignmentSpec};
-    use crate::models::template_spec::TemplateSpec;
-    use crate::models::templates_spec::TemplatesSpec;
+    use crate::models::assignment::{ApplicationAssignment, ApplicationAssignmentSpec};
+    use crate::models::template::TemplateSpec;
+    use crate::models::templates::TemplatesSpec;
 
     use super::GitopsWorkflow;
 
@@ -390,7 +390,7 @@ mod tests {
         values.insert("ring".to_string(), "main".to_string());
 
         let application = Application {
-            api_version: "v1".to_string(),
+            api_version: "v1alpha1".to_string(),
             kind: "Application".to_string(),
             metadata: ObjectMeta {
                 name: Some("cluster-agent".to_string()),
@@ -412,7 +412,7 @@ mod tests {
         };
 
         let application_assignment = ApplicationAssignment {
-            api_version: "v1".to_string(),
+            api_version: "v1alpha1".to_string(),
             kind: "ApplicationAssignment".to_string(),
             metadata: ObjectMeta {
                 name: Some("azure-eastus2-1-cluster-agent".to_string()),

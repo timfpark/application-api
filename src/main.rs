@@ -1,4 +1,4 @@
-use controllers::application_assignment::ApplicationAssignmentController;
+use controllers::assignment::ApplicationAssignmentController;
 use futures::stream::StreamExt;
 use kube::Resource;
 use kube::ResourceExt;
@@ -12,7 +12,7 @@ mod models;
 mod utils;
 mod workflows;
 
-use models::application_assignment::ApplicationAssignment;
+use models::assignment::ApplicationAssignment;
 use utils::error::Error;
 
 #[tokio::main]

@@ -1,8 +1,13 @@
-use std::collections::HashMap;
-
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+#[derive(Clone, Debug, PartialEq, JsonSchema, Serialize, Deserialize)]
+pub enum ClustersSpec {
+    Count(u32),
+    All,
+}
 
 /// Struct corresponding to the Specification (`spec`) part of the `ApplicationAssignment` resource, directly
 /// reflects context of the `applicationassignments.microsoft.com.yaml` file to be found in this repository.
@@ -11,13 +16,20 @@ use serde::{Deserialize, Serialize};
 #[kube(
     group = "microsoft.com",
     version = "v1alpha1",
-    kind = "ApplicationAssignment",
-    plural = "applicationassignments",
+    kind = "ApplicationDeployment",
+    plural = "applicationdeployments",
     derive = "PartialEq",
     namespaced
 )]
-pub struct Cluster {
-    pub name: String,
-    pub labels: HashMap<String, String>,
-    pub environments: Vec<String>,
+pub struct ApplicationDeploymentSpec {
+    // app.yaml pointer spec
+    pub repo: String,
+    pub reference: String,
+    pub path: String,
+
+    // how many stamps for this should be deployed
+    pub clusters: ClustersSpec,
+
+    pub selector: HashMap<String, String>,
+    pub values: Option<HashMap<String, String>>,
 }

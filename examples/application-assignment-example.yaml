@@ -1,4 +1,4 @@
-apiVersion: example.com/v1
+apiVersion: microsoft.com/v1alpha1
 kind: ApplicationAssignment
 metadata:
     name: cluster-agent-main-azure-eastus2-1

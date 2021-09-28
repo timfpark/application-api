@@ -1,7 +1,8 @@
+/*
 use kube::Error;
 
 use crate::models::application::Application;
-use crate::models::application_assignment::ApplicationAssignment;
+use crate::models::assignment::ApplicationAssignment;
 
 // TODO: traits don't support async yet :(
 pub trait Workflow {
@@ -11,3 +12,4 @@ pub trait Workflow {
         application_assignment: &ApplicationAssignment,
     ) -> Result<(), Error>;
 }
+*/
