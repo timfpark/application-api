@@ -5,6 +5,7 @@ use kube::ResourceExt;
 use kube::{api::ListParams, client::Client, Api};
 use kube_runtime::controller::{Context, ReconcilerAction};
 use kube_runtime::Controller;
+use log::{debug, error, info};
 use tokio::time::Duration;
 
 mod controllers;
@@ -17,6 +18,8 @@ use utils::error::Error;
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     // First, a Kubernetes client must be obtained using the `kube` crate
     // The client will later be moved to the custom controller
     let kubernetes_client: Client = Client::try_default()
@@ -36,16 +39,16 @@ async fn main() {
     Controller::new(crd_api.clone(), ListParams::default())
         .run(reconcile, on_error, context)
         .for_each(|reconciliation_result| async move {
-            println!("{:?}", reconciliation_result);
+            info!("reconciliation result: {:?}", reconciliation_result);
             match reconciliation_result {
                 Ok(application_assignment_resource) => {
-                    println!(
+                    info!(
                         "Reconciliation successful. Resource: {:?}",
                         application_assignment_resource
                     );
                 }
                 Err(reconciliation_err) => {
-                    eprintln!("Reconciliation error: {:?}", reconciliation_err)
+                    error!("Reconciliation error: {:?}", reconciliation_err)
                 }
             }
         })
@@ -104,7 +107,7 @@ async fn reconcile(
     // Performs action as decided by the `determine_action` function.
     return match determine_action(&application_assignment) {
         Action::Create => {
-            println!("Action::Create");
+            debug!("Action::Create");
             // Creates a deployment with `n` ApplicationAssignment service pods, but applies a finalizer first.
             // Finalizer is applied first, as the operator might be shut down and restarted
             // at any time, leaving subresources in intermediate state. This prevents leaks on
@@ -128,7 +131,7 @@ async fn reconcile(
             })
         }
         Action::Delete => {
-            println!("Action::Delete");
+            debug!("Action::Create");
             // Deletes any subresources related to this `ApplicationAssignment` resources. If and only if all subresources
             // are deleted, the finalizer is removed and Kubernetes is free to remove the `ApplicationAssignment` resource.
 
@@ -152,7 +155,7 @@ async fn reconcile(
             })
         }
         Action::NoOp => {
-            println!("Action::NoOp");
+            debug!("Action::Create");
 
             Ok(ReconcilerAction {
                 // The resource is already in desired state, do nothing and re-check after 60 seconds
@@ -186,7 +189,7 @@ fn determine_action(application_assignment: &ApplicationAssignment) -> Action {
 /// - `error`: A reference to the `kube::Error` that occurred during reconciliation.
 /// - `_context`: Unused argument. Context Data "injected" automatically by kube-rs.
 fn on_error(error: &Error, _context: Context<ContextData>) -> ReconcilerAction {
-    eprintln!("Reconciliation error:\n{:?}", error);
+    error!("Reconciliation error:\n{:?}", error);
     ReconcilerAction {
         requeue_after: Some(Duration::from_secs(5)),
     }

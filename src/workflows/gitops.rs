@@ -3,6 +3,7 @@ use git2::{
     Cred, Direction, Index, ObjectType, Oid, PushOptions, RemoteCallbacks, Repository, Signature,
 };
 use handlebars::Handlebars;
+use log::debug;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
@@ -124,7 +125,7 @@ impl GitopsWorkflow {
                     paths.append(&mut subpaths);
                 }
             } else {
-                // println!("adding path to list {:?}", output_relative_path);
+                // debug!("adding path to list {:?}", output_relative_path);
                 paths.push(output_relative_path);
 
                 let template = std::fs::read_to_string(entry_template_path)?;
@@ -192,7 +193,7 @@ resources:
         message: &str,
     ) -> Result<Oid, Error> {
         for path in paths.iter() {
-            // println!("adding path to index {:?}", path);
+            // debug!("adding path to index {:?}", path);
             index.add_path(path)?;
         }
 
@@ -326,7 +327,7 @@ resources:
         &self,
         application_assignment: &ApplicationAssignment,
     ) -> Result<Oid, Error> {
-        println!("gitopsworkflow: delete_deployment");
+        debug!("gitopsworkflow: delete_deployment");
         let application_gitops_temp_dir = tempdir()?;
 
         // clone application cluster gitops repo specified by application_repo_url
@@ -371,6 +372,7 @@ resources:
 #[cfg(test)]
 mod tests {
     use kube::core::metadata::ObjectMeta;
+    use log::debug;
     use std::collections::HashMap;
     use std::path::Path;
 
@@ -427,7 +429,7 @@ mod tests {
 
         match workflow.create_deployment(&application, &application_assignment) {
             Err(err) => {
-                eprintln!("create deployment failed with: {:?}", err);
+                debug!("create deployment failed with: {:?}", err);
                 assert_eq!(false, true);
             }
             Ok(_) => {}

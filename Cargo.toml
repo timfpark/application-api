@@ -5,6 +5,7 @@ authors = ["Tim Park <timfpark@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+env_logger = "~0.9"
 futures = "~0.3"
 git2 = "~0.13"
 handlebars = "~4.1"
@@ -12,6 +13,7 @@ kube = { version = "~0.60", default-features = true, features = ["derive"] } # L
 kube-derive = "~0.60" # Support for Custom Resource Definitions
 kube-runtime = "~0.60" # Custom controller support
 k8s-openapi = { version = "~0.13", default-features = false, features = ["v1_22"] } # Kube-rs depends on k8s-openapi
+log = "~0.4"
 regex = "~1.5"
 serde = "~1.0"
 serde_json = "~1.0"

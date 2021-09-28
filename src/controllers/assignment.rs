@@ -1,5 +1,6 @@
 use kube::api::{Patch, PatchParams};
 use kube::{Api, Client};
+use log::debug;
 use serde_json::{json, Value};
 
 use crate::models::application::Application;
@@ -38,7 +39,7 @@ impl ApplicationAssignmentController {
         name: &str,
         namespace: &str,
     ) -> Result<ApplicationAssignment, Error> {
-        println!("Application add_finalizer_record");
+        debug!("Application add_finalizer_record");
 
         let api: Api<ApplicationAssignment> = Api::namespaced(self.client.clone(), namespace);
         let finalizer: Value = json!({
@@ -61,19 +62,19 @@ impl ApplicationAssignmentController {
     ///
     /// Note: It is assumed the resource does not already exists for simplicity. Returns an `Error` if it does.
     pub async fn create_deployment(&self, name: &str, namespace: &str) -> Result<(), Error> {
-        println!("Application create_deployment");
+        debug!("Application create_deployment");
 
         let application_api: Api<Application> = Api::namespaced(self.client.clone(), namespace);
         let application_assignment_api: Api<ApplicationAssignment> =
             Api::namespaced(self.client.clone(), namespace);
 
         let application_assignment = application_assignment_api.get(name).await?;
-        println!("{:?}", application_assignment);
+        debug!("{:?}", application_assignment);
 
         let application = application_api
             .get(&application_assignment.spec.application)
             .await?;
-        println!("{:?}", application);
+        debug!("{:?}", application);
 
         self.workflow
             .create_deployment(&application, &application_assignment)?;
@@ -90,13 +91,13 @@ impl ApplicationAssignmentController {
     ///
     /// Note: It is assumed the deployment exists for simplicity. Otherwise returns an Error.
     pub async fn delete_deployment(&self, name: &str, namespace: &str) -> Result<(), Error> {
-        println!("Application delete_deployment");
+        debug!("Application delete_deployment");
 
         let application_assignment_api: Api<ApplicationAssignment> =
             Api::namespaced(self.client.clone(), namespace);
 
         let application_assignment = application_assignment_api.get(name).await?;
-        println!("{:?}", application_assignment);
+        debug!("{:?}", application_assignment);
 
         self.workflow.delete_deployment(&application_assignment)?;
 
@@ -117,7 +118,7 @@ impl ApplicationAssignmentController {
         name: &str,
         namespace: &str,
     ) -> Result<ApplicationAssignment, Error> {
-        println!("Application delete_finalizer_record");
+        debug!("Application delete_finalizer_record");
 
         let api: Api<ApplicationAssignment> = Api::namespaced(self.client.clone(), namespace);
         let finalizer: Value = json!({
