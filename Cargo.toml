@@ -8,10 +8,10 @@ edition = "2018"
 futures = "~0.3"
 git2 = "~0.13"
 handlebars = "~4.1"
-kube = { version = "~0.57", default-features = true, features = ["derive"] } # Library for talking to Kubernetes API
-kube-derive = "~0.57" # Support for Custom Resource Definitions
-kube-runtime = "~0.57" # Custom controller support
-k8s-openapi = { version = "~0.12", default-features = false, features = ["v1_17"] } # Kube-rs depends on k8s-openapi
+kube = { version = "~0.60", default-features = true, features = ["derive"] } # Library for talking to Kubernetes API
+kube-derive = "~0.60" # Support for Custom Resource Definitions
+kube-runtime = "~0.60" # Custom controller support
+k8s-openapi = { version = "~0.13", default-features = false, features = ["v1_22"] } # Kube-rs depends on k8s-openapi
 regex = "~1.5"
 serde = "~1.0"
 serde_json = "~1.0"
