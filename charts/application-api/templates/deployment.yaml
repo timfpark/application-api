@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: application-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: application-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: application-api
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: application-api
+    spec:
+      tolerations:
+      - key: "kubernetes.azure.com/scalesetpriority"
+        operator: "Equal"
+        value: "spot"
+        effect: "NoSchedule"
+      containers:
+      - name: application-api
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: "IfNotPresent"
+        resources:
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+          limits:
+            cpu: {{ .Values.resources.limits.cpu }}
+            memory: {{ .Values.resources.limits.memory }}
+        ports:
+        - containerPort: {{ .Values.port }}
+          protocol: TCP
+        envFrom:
+          - configMapRef:
+               name: {{ .Values.service.name }}

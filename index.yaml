@@ -1,0 +1,15 @@
+apiVersion: v1
+entries:
+  application-api:
+  - apiVersion: v1
+    created: "2021-10-04T16:51:05.476687-07:00"
+    description: Application API chart
+    digest: 54f64b7100ac7cb0c732125423fccb477545a2832d23c5813fd70d332d67dc99
+    maintainers:
+    - email: timfpark@gmail.com
+      name: timfpark
+    name: application-api
+    urls:
+    - https://timfpark.github.io/application-api/dist/application-api-1.0.0.tgz
+    version: 1.0.0
+generated: "2021-10-04T16:51:05.475938-07:00"
