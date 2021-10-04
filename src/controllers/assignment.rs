@@ -5,6 +5,9 @@ use serde_json::{json, Value};
 
 use crate::models::application::Application;
 use crate::models::assignment::ApplicationAssignment;
+use crate::models::environment::ApplicationEnvironment;
+use crate::models::template::ApplicationTemplate;
+
 use crate::utils::error::Error;
 use crate::workflows::gitops::GitopsWorkflow;
 
@@ -67,17 +70,38 @@ impl ApplicationAssignmentController {
         let application_api: Api<Application> = Api::namespaced(self.client.clone(), namespace);
         let application_assignment_api: Api<ApplicationAssignment> =
             Api::namespaced(self.client.clone(), namespace);
+        let application_environment_api: Api<ApplicationEnvironment> =
+            Api::namespaced(self.client.clone(), namespace);
+        let application_template_api: Api<ApplicationTemplate> =
+            Api::namespaced(self.client.clone(), namespace);
 
         let application_assignment = application_assignment_api.get(name).await?;
         debug!("{:?}", application_assignment);
 
-        let application = application_api
-            .get(&application_assignment.spec.application)
+        let application_environment = application_environment_api
+            .get(&application_assignment.spec.environment)
             .await?;
+
+        debug!("{:?}", application_environment);
+
+        let application = application_api
+            .get(&application_environment.spec.application)
+            .await?;
+
         debug!("{:?}", application);
 
-        self.workflow
-            .create_deployment(&application, &application_assignment)?;
+        let application_template = application_template_api
+            .get(&application.spec.template)
+            .await?;
+
+        debug!("{:?}", application);
+
+        let _oid = self.workflow.create_deployment(
+            &application,
+            &application_template,
+            &application_environment,
+            &application_assignment,
+        )?;
 
         Ok(())
     }
@@ -93,11 +117,28 @@ impl ApplicationAssignmentController {
     pub async fn delete_deployment(&self, name: &str, namespace: &str) -> Result<(), Error> {
         debug!("Application delete_deployment");
 
+        let application_api: Api<Application> = Api::namespaced(self.client.clone(), namespace);
+
         let application_assignment_api: Api<ApplicationAssignment> =
+            Api::namespaced(self.client.clone(), namespace);
+
+        let application_environment_api: Api<ApplicationEnvironment> =
             Api::namespaced(self.client.clone(), namespace);
 
         let application_assignment = application_assignment_api.get(name).await?;
         debug!("{:?}", application_assignment);
+
+        let application_environment = application_environment_api
+            .get(&application_assignment.spec.environment)
+            .await?;
+
+        debug!("{:?}", application_environment);
+
+        let application = application_api
+            .get(&application_environment.spec.application)
+            .await?;
+
+        debug!("{:?}", application);
 
         self.workflow.delete_deployment(&application_assignment)?;
 

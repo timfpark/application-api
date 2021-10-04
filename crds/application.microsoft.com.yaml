@@ -1,16 +1,16 @@
 apiVersion: apiextensions.k8s.io/v1alpha1
 kind: CustomResourceDefinition
 metadata:
-    name: applicationassignments.microsoft.com
+    name: applications.microsoft.com
     namespace: default # For easier deployment and avoid permissions collisions on most clusters, the resource is namespace-scoped. More information at: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/
 spec:
     group: microsoft.com
     names:
-        kind: ApplicationAssignment
-        plural: applicationassignments
-        singular: applicationassignment
+        kind: Application
+        plural: applications
+        singular: application
         shortNames:
-            - wa
+            - a
     scope: Namespaced
     versions:
         - name: v1alpha1
@@ -23,8 +23,9 @@ spec:
                       spec:
                           type: object
                           properties:
-                              cluster:
+                              template: # templates define the resources that are deployed
                                   type: string
-                              application:
-                                  type: string
-                          required: ["cluster", "application"]
+                              values:
+                                  x-kubernetes-preserve-unknown-fields: true
+                                  type: object
+                          required: ["template"]

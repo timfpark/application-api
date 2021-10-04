@@ -13,6 +13,8 @@ use tempfile::{tempdir, TempDir};
 
 use crate::models::application::Application;
 use crate::models::assignment::ApplicationAssignment;
+use crate::models::environment::ApplicationEnvironment;
+use crate::models::template::ApplicationTemplate;
 use crate::utils::error::Error;
 
 pub struct GitopsWorkflow {
@@ -60,22 +62,22 @@ impl GitopsWorkflow {
         builder
     }
 
-    fn clone_deployment_repo(
+    fn clone_template_repo(
         &self,
-        application: &Application,
-        deployment_temp_dir: &TempDir,
+        template: &ApplicationTemplate,
+        temp_dir: &TempDir,
     ) -> Result<Repository, Error> {
-        let repo_path = deployment_temp_dir.path().join("template");
+        let repo_path = temp_dir.path().join("template");
 
         let mut repo_builder = self.get_repo_builder();
 
-        match repo_builder.clone(&application.spec.templates.application.source, &repo_path) {
+        match repo_builder.clone(&template.spec.repo, &repo_path) {
             Ok(repo) => Ok(repo),
             Err(err) => Err(Error::GitError { source: err }),
         }
     }
 
-    fn clone_application_gitops_repo(
+    fn clone_cluster_gitops_repo(
         &self,
         application_gitops_temp_dir: &TempDir,
     ) -> Result<Repository, Error> {
@@ -249,40 +251,51 @@ resources:
     pub fn create_deployment(
         &self,
         application: &Application,
-        application_assignment: &ApplicationAssignment,
+        template: &ApplicationTemplate,
+        environment: &ApplicationEnvironment,
+        assignment: &ApplicationAssignment,
     ) -> Result<Oid, Error> {
-        let deployment_temp_dir = tempdir()?;
-        let application_gitops_temp_dir = tempdir()?;
+        let template_temp_dir = tempdir()?;
+        let cluster_gitops_temp_dir = tempdir()?;
 
-        // clone app repo specified by application.spec.templates.deployment.source
-        let application_template_repo =
-            self.clone_deployment_repo(application, &deployment_temp_dir)?;
+        println!("template temp dir {:?}", template_temp_dir);
+        println!("cluster_gitops_temp_dir {:?}", cluster_gitops_temp_dir);
+
+        let template_repo = self.clone_template_repo(template, &template_temp_dir)?;
 
         // clone application cluster gitops repo specified by application_repo_url
-        let application_gitops_repo =
-            self.clone_application_gitops_repo(&application_gitops_temp_dir)?;
+        let cluster_gitops_repo = self.clone_cluster_gitops_repo(&cluster_gitops_temp_dir)?;
 
-        let template_path = Path::new(application_template_repo.path())
+        let template_path = Path::new(template_repo.path())
             .parent()
             .unwrap()
-            .join(&application.spec.templates.application.path);
+            .join(&template.spec.path);
 
-        let application_gitops_repo_path =
-            Path::new(application_gitops_repo.path()).parent().unwrap();
+        println!("template_path {:?}", template_path);
+
+        let cluster_gitops_repo_path = Path::new(cluster_gitops_repo.path()).parent().unwrap();
 
         // TODO: should we be less opinionated / more configurable about where applications go?
-        let cluster_relative_path = Path::new(&application_assignment.spec.cluster);
-        let cluster_path = application_gitops_repo_path.join(&cluster_relative_path);
+        let cluster_relative_path = Path::new(&assignment.spec.cluster);
+        let cluster_path = cluster_gitops_repo_path.join(&cluster_relative_path);
 
-        let output_relative_path =
-            cluster_relative_path.join(&application_assignment.spec.application);
+        let application_name = application.metadata.name.as_ref().unwrap();
+        let assignment_name = assignment.metadata.name.as_ref().unwrap();
 
-        let mut index = application_gitops_repo.index()?;
+        // output -> cluster relative path / assignment name
+        let output_relative_path = cluster_relative_path
+            //            .join(&application_name)
+            //            .join(&environment.spec.environment)
+            .join(&assignment_name);
+
+        println!("output_relative_path {:?}", output_relative_path);
+
+        let mut index = cluster_gitops_repo.index()?;
         index.remove_dir(&output_relative_path, 0)?;
 
         // build template context variables
         let mut template_values: HashMap<&str, &str> = HashMap::new();
-        template_values.insert("clusterName", &application_assignment.spec.cluster);
+        template_values.insert("clusterName", &assignment.spec.cluster);
 
         // TODO: Fetch assigned cluster when we are using Cluster API
         template_values.insert("cloud", "azure");
@@ -295,9 +308,23 @@ resources:
             }
         }
 
+        // add in values from ApplicationEnvironment
+        if let Some(values) = &environment.spec.values {
+            for (key, value) in values.iter() {
+                template_values.insert(&key, &value);
+            }
+        }
+
+        // add in values from ApplicationAssignment
+        if let Some(values) = &assignment.spec.values {
+            for (key, value) in values.iter() {
+                template_values.insert(&key, &value);
+            }
+        }
+
         let mut paths = self.render(
             &template_path,
-            application_gitops_repo_path,
+            cluster_gitops_repo_path,
             &output_relative_path,
             &template_values,
         )?;
@@ -309,40 +336,40 @@ resources:
         // TODO(ENH): Support different messages
         let message = format!(
             "Reconciling created ApplicationAssignment {} for Application {} for Cluster {}",
-            application_assignment.metadata.name.as_ref().unwrap(),
-            application_assignment.spec.application,
-            application_assignment.spec.cluster
+            assignment.metadata.name.as_ref().unwrap(),
+            application_name,
+            assignment.spec.cluster
         );
 
         // add and commit output path in application cluster gitops repo
-        let oid = self.commit_files(&application_gitops_repo, &mut index, paths, &message)?;
+        let oid = self.commit_files(&cluster_gitops_repo, &mut index, paths, &message)?;
 
         // TODO: make more flexible to support different branches
-        self.push(&application_gitops_repo, &self.application_repo_url, "main")?;
+        self.push(&cluster_gitops_repo, &self.application_repo_url, "main")?;
 
         Ok(oid)
     }
 
-    pub fn delete_deployment(
-        &self,
-        application_assignment: &ApplicationAssignment,
-    ) -> Result<Oid, Error> {
+    pub fn delete_deployment(&self, assignment: &ApplicationAssignment) -> Result<Oid, Error> {
         debug!("gitopsworkflow: delete_deployment");
         let application_gitops_temp_dir = tempdir()?;
 
-        // clone application cluster gitops repo specified by application_repo_url
-        let application_gitops_repo =
-            self.clone_application_gitops_repo(&application_gitops_temp_dir)?;
-        let application_gitops_repo_path =
-            Path::new(application_gitops_repo.path()).parent().unwrap();
+        // clone cluster gitops repo specified by application_repo_url
+        let cluster_gitops_repo = self.clone_cluster_gitops_repo(&application_gitops_temp_dir)?;
+        let application_gitops_repo_path = Path::new(cluster_gitops_repo.path()).parent().unwrap();
 
-        let cluster_relative_path = Path::new(&application_assignment.spec.cluster);
+        let cluster_relative_path = Path::new(&assignment.spec.cluster);
         let cluster_path = application_gitops_repo_path.join(&cluster_relative_path);
 
-        let output_relative_path =
-            cluster_relative_path.join(&application_assignment.spec.application);
+        let assignment_name = assignment.metadata.name.as_ref().unwrap();
 
-        let mut index = application_gitops_repo.index()?;
+        // output -> cluster relative path / assignment name
+        let output_relative_path = cluster_relative_path
+            //            .join(&application_name)
+            //            .join(&environment.spec.environment)
+            .join(&assignment_name);
+
+        let mut index = cluster_gitops_repo.index()?;
 
         index.remove_dir(&output_relative_path, 0)?;
 
@@ -353,17 +380,17 @@ resources:
 
         // TODO(ENH): Support different messages
         let message = format!(
-            "Reconciling deleted ApplicationAssignment {} for Application {} for Cluster {}",
-            application_assignment.metadata.name.as_ref().unwrap(),
-            application_assignment.spec.application,
-            application_assignment.spec.cluster
+            "Reconciling deleted ApplicationAssignment {} for Environment {} for Cluster {}",
+            assignment.metadata.name.as_ref().unwrap(),
+            assignment.spec.environment,
+            assignment.spec.cluster
         );
 
         // add and commit output path in application cluster gitops repo
-        let oid = self.commit_files(&application_gitops_repo, &mut index, paths, &message)?;
+        let oid = self.commit_files(&cluster_gitops_repo, &mut index, paths, &message)?;
 
         // TODO: make more flexible to support different branches
-        self.push(&application_gitops_repo, &self.application_repo_url, "main")?;
+        self.push(&cluster_gitops_repo, &self.application_repo_url, "main")?;
 
         Ok(oid)
     }
@@ -372,14 +399,13 @@ resources:
 #[cfg(test)]
 mod tests {
     use kube::core::metadata::ObjectMeta;
-    use log::debug;
     use std::collections::HashMap;
     use std::path::Path;
 
     use crate::models::application::{Application, ApplicationSpec};
     use crate::models::assignment::{ApplicationAssignment, ApplicationAssignmentSpec};
-    use crate::models::template::TemplateSpec;
-    use crate::models::templates::TemplatesSpec;
+    use crate::models::environment::{ApplicationEnvironment, ApplicationEnvironmentSpec};
+    use crate::models::template::{ApplicationTemplate, ApplicationTemplateSpec};
 
     use super::GitopsWorkflow;
 
@@ -388,8 +414,7 @@ mod tests {
         let workflow =
             GitopsWorkflow::new("git@github.com:timfpark/workload-cluster-gitops").unwrap();
 
-        let mut values: HashMap<String, String> = HashMap::new();
-        values.insert("ring".to_string(), "main".to_string());
+        let application_values: HashMap<String, String> = HashMap::new();
 
         let application = Application {
             api_version: "v1alpha1".to_string(),
@@ -400,20 +425,46 @@ mod tests {
                 ..ObjectMeta::default()
             },
             spec: ApplicationSpec {
-                templates: TemplatesSpec {
-                    application: TemplateSpec {
-                        method: Some("git".to_string()),
-                        source: "git@github.com:timfpark/cluster-agent".to_string(),
-                        path: "templates/deployment".to_string(),
-                    },
-
-                    global: None,
-                },
-                values: Some(values),
+                template: "external-service".to_string(),
+                values: Some(application_values),
             },
         };
 
-        let application_assignment = ApplicationAssignment {
+        let environment_values: HashMap<String, String> = HashMap::new();
+
+        let environment = ApplicationEnvironment {
+            api_version: "v1alpha1".to_string(),
+            kind: "ApplicationEnvironment".to_string(),
+            metadata: ObjectMeta {
+                name: Some("dev".to_string()),
+                namespace: Some("default".to_string()),
+                ..ObjectMeta::default()
+            },
+            spec: ApplicationEnvironmentSpec {
+                application: "cluster-agent".to_string(),
+                environment: "dev".to_string(),
+                values: Some(environment_values),
+            },
+        };
+
+        let assignment_values: HashMap<String, String> = HashMap::new();
+
+        let assignment = ApplicationAssignment {
+            api_version: "v1alpha1".to_string(),
+            kind: "ApplicationAssignment".to_string(),
+            metadata: ObjectMeta {
+                name: Some("azure-eastus2-1-cluster-agent-dev".to_string()),
+                namespace: Some("default".to_string()),
+                ..ObjectMeta::default()
+            },
+            spec: ApplicationAssignmentSpec {
+                cluster: "azure-eastus2-1".to_string(),
+                environment: "dev".to_string(),
+                values: Some(assignment_values),
+            },
+        };
+
+        let template = ApplicationTemplate {
             api_version: "v1alpha1".to_string(),
             kind: "ApplicationAssignment".to_string(),
             metadata: ObjectMeta {
@@ -421,15 +472,16 @@ mod tests {
                 namespace: Some("default".to_string()),
                 ..ObjectMeta::default()
             },
-            spec: ApplicationAssignmentSpec {
-                cluster: "azure-eastus2-1".to_string(),
-                application: "cluster-agent".to_string(),
+            spec: ApplicationTemplateSpec {
+                repo: "git@github.com:timfpark/cluster-agent".to_string(),
+                reference: "main".to_string(),
+                path: "templates/deployment".to_string(),
             },
         };
 
-        match workflow.create_deployment(&application, &application_assignment) {
+        match workflow.create_deployment(&application, &template, &environment, &assignment) {
             Err(err) => {
-                debug!("create deployment failed with: {:?}", err);
+                println!("create deployment failed with: {:?}", err);
                 assert_eq!(false, true);
             }
             Ok(_) => {}

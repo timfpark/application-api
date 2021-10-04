@@ -4,7 +4,7 @@ use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::templates::TemplatesSpec;
+// use super::templates::TemplatesSpec;
 
 /// Struct corresponding to the Specification (`spec`) part of the `Application` resource, directly
 /// reflects context of the `applications.microsoft.com.yaml` file to be found in this repository.
@@ -19,6 +19,6 @@ use super::templates::TemplatesSpec;
     namespaced
 )]
 pub struct ApplicationSpec {
-    pub templates: TemplatesSpec,
+    pub template: String,
     pub values: Option<HashMap<String, String>>,
 }

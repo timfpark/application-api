@@ -1,6 +1,7 @@
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Struct corresponding to the Specification (`spec`) part of the `ApplicationAssignment` resource, directly
 /// reflects context of the `applicationassignments.microsoft.com.yaml` file to be found in this repository.
@@ -15,6 +16,8 @@ use serde::{Deserialize, Serialize};
     namespaced
 )]
 pub struct ApplicationAssignmentSpec {
-    pub application: String,
+    pub environment: String,
     pub cluster: String,
+
+    pub values: Option<HashMap<String, String>>,
 }
