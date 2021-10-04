@@ -26,5 +26,5 @@ jobs:
               id: extract_branch
             - run: |
                   export TAG=`date -u +"%Y%m%dT%H%M%SZ"`
-                  docker build . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/cluster-agent-${{ steps.extract_branch.outputs.branch }}:$TAG
-                  docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/cluster-agent-${{ steps.extract_branch.outputs.branch }}:$TAG
+                  docker build . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/application-api:$TAG
+                  docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/application-api:$TAG
