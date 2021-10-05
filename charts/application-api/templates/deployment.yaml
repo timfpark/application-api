@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: application-api
-        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        image: {{ .Values.image.repository }}/application-api:{{ .Values.image.tag }}
         imagePullPolicy: "IfNotPresent"
         resources:
           requests:
