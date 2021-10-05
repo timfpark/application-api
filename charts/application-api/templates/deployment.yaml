@@ -17,6 +17,7 @@ spec:
       labels:
         app: application-api
     spec:
+      serviceAccount: application-api
       containers:
       - name: application-api
         image: {{ .Values.image.repository }}/application-api:{{ .Values.image.tag }}
