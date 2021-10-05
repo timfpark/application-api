@@ -17,11 +17,6 @@ spec:
       labels:
         app: application-api
     spec:
-      tolerations:
-      - key: "kubernetes.azure.com/scalesetpriority"
-        operator: "Equal"
-        value: "spot"
-        effect: "NoSchedule"
       containers:
       - name: application-api
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
@@ -38,4 +33,4 @@ spec:
           protocol: TCP
         envFrom:
           - configMapRef:
-               name: {{ .Values.service.name }}
+               name: application-api
