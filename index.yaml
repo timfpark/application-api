@@ -2,7 +2,18 @@ apiVersion: v1
 entries:
   application-api:
   - apiVersion: v1
-    created: "2021-10-05T11:13:51.300797-07:00"
+    created: "2021-10-05T11:19:30.666872-07:00"
+    description: Application API chart
+    digest: bb69f6e5daa22f12acedcdb2ac9d8e9366eb816c129356b3151449c6bdfd264f
+    maintainers:
+    - email: timfpark@gmail.com
+      name: timfpark
+    name: application-api
+    urls:
+    - https://timfpark.github.io/application-api/dist/application-api-1.0.4.tgz
+    version: 1.0.4
+  - apiVersion: v1
+    created: "2021-10-05T11:19:30.666354-07:00"
     description: Application API chart
     digest: 09add78c9c04c7788e57706b4f7dd34868be8ccde1e140115919a77824d26565
     maintainers:
@@ -13,7 +24,7 @@ entries:
     - https://timfpark.github.io/application-api/dist/application-api-1.0.3.tgz
     version: 1.0.3
   - apiVersion: v1
-    created: "2021-10-05T11:13:51.300262-07:00"
+    created: "2021-10-05T11:19:30.665814-07:00"
     description: Application API chart
     digest: 50d2a831a7c04243723452a9beaa0ea978db99504d3eb05cfaa0df3a7005598b
     maintainers:
@@ -24,7 +35,7 @@ entries:
     - https://timfpark.github.io/application-api/dist/application-api-1.0.2.tgz
     version: 1.0.2
   - apiVersion: v1
-    created: "2021-10-05T11:13:51.299649-07:00"
+    created: "2021-10-05T11:19:30.665277-07:00"
     description: Application API chart
     digest: 782d24b8f5389f608ff94451259528748dd7b6c2c45576d5b716d6bf3f10ae64
     maintainers:
@@ -35,7 +46,7 @@ entries:
     - https://timfpark.github.io/application-api/dist/application-api-1.0.1.tgz
     version: 1.0.1
   - apiVersion: v1
-    created: "2021-10-05T11:13:51.298841-07:00"
+    created: "2021-10-05T11:19:30.664717-07:00"
     description: Application API chart
     digest: 54f64b7100ac7cb0c732125423fccb477545a2832d23c5813fd70d332d67dc99
     maintainers:
@@ -45,4 +56,4 @@ entries:
     urls:
     - https://timfpark.github.io/application-api/dist/application-api-1.0.0.tgz
     version: 1.0.0
-generated: "2021-10-05T11:13:51.2978-07:00"
+generated: "2021-10-05T11:19:30.663306-07:00"
