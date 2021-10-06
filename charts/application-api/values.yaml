@@ -2,7 +2,7 @@
 
 image:
     repository: tpark.azurecr.io
-    tag: 20211004T232026Z
+    tag: 20211006T162343Z
 
 port: 80
 
