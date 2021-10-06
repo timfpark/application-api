@@ -20,6 +20,8 @@ use utils::error::Error;
 async fn main() {
     env_logger::init();
 
+    println!("starting");
+
     // First, a Kubernetes client must be obtained using the `kube` crate
     // The client will later be moved to the custom controller
     let kubernetes_client: Client = Client::try_default()
@@ -27,7 +29,7 @@ async fn main() {
         .expect("Expected a valid KUBECONFIG environment variable.");
 
     // Preparation of resources used by the `kube_runtime::Controller`
-    let crd_api: Api<ApplicationAssignment> = Api::all(kubernetes_client.clone());
+    let assignment_api: Api<ApplicationAssignment> = Api::all(kubernetes_client.clone());
     let context: Context<ContextData> = Context::new(ContextData::new(kubernetes_client.clone()));
 
     // The controller comes from the `kube_runtime` crate and manages the reconciliation process.
@@ -36,10 +38,10 @@ async fn main() {
     // - `kube::api::ListParams` to select the `ApplicationAssignment` resources with. Can be used for ApplicationAssignment filtering `ApplicationAssignment` resources before reconciliation,
     // - `reconcile` function with reconciliation logic to be called each time a resource of `ApplicationAssignment` kind is created/updated/deleted,
     // - `on_error` function to call whenever reconciliation fails.
-    Controller::new(crd_api.clone(), ListParams::default())
+    Controller::new(assignment_api.clone(), ListParams::default())
         .run(reconcile, on_error, context)
         .for_each(|reconciliation_result| async move {
-            info!("reconciliation result: {:?}", reconciliation_result);
+            println!("reconciliation result: {:?}", reconciliation_result);
             match reconciliation_result {
                 Ok(application_assignment_resource) => {
                     info!(
