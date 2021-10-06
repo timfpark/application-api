@@ -32,6 +32,9 @@ spec:
         ports:
         - containerPort: {{ .Values.port }}
           protocol: TCP
+        env:
+        - name: KUBECONFIG
+          value: "/mnt/secrets-store/control-plane-kubeconfig"
         volumeMounts:
         - name: secrets-store-inline
           mountPath: "/mnt/secrets-store"

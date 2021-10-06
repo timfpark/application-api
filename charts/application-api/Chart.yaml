@@ -1,6 +1,6 @@
 name: application-api
 description: Application API chart
-version: 1.0.7
+version: 1.0.8
 maintainers:
     - name: timfpark
       email: timfpark@gmail.com
