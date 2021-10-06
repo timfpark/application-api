@@ -32,10 +32,13 @@ impl GitopsWorkflow {
         // Prepare callbacks.
         let mut callbacks = RemoteCallbacks::new();
 
-        // TODO: Migrate to secrets
         callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            let home_dir = env::var("HOME").unwrap();
-            let private_ssh_key_path = std::path::Path::new(&home_dir).join(".ssh/id_rsa");
+            let secrets_path = match env::var("SECRETS_PATH") {
+                Ok(secrets_path) => secrets_path,
+                Err(_) => "/mnt/secrets_store".to_string()
+            };
+
+            let private_ssh_key_path = std::path::Path::new(&secrets_path).join("git-ssh-private-key");
 
             Cred::ssh_key(
                 username_from_url.unwrap(),
